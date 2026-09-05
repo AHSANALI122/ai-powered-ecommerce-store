@@ -1,0 +1,8 @@
+.next
+node_modules
+src/generated
+prisma/migrations
+package-lock.json
+
+# Authored documents — do not reformat
+spec.md

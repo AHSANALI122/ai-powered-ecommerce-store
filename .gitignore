@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# next
+.next/
+out/
+build/
+next-env.d.ts
+
+# generated prisma client
+/src/generated/
+
+# env — only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# testing
+coverage/
+test-results/
+playwright-report/
+
+# misc
+.DS_Store
+*.pem
+.vercel
+*.tsbuildinfo
+.eslintcache

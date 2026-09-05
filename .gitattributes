@@ -1,0 +1,19 @@
+# Normalise line endings: LF in the repository and in every working copy.
+# Without this, core.autocrlf=true on Windows checks files out as CRLF and
+# `prettier --check` (endOfLine: "lf" by default) fails on a clean tree.
+* text=auto eol=lf
+
+# Binary assets must never be normalised.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+
+# Keep generated lockfiles out of diff review noise.
+package-lock.json linguist-generated=true -diff

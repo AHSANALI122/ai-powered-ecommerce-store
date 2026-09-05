@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" role="img" aria-label="Product image placeholder">
+  <rect width="600" height="800" fill="#e9e6e1"/>
+  <g fill="none" stroke="#b9b2a8" stroke-width="6" stroke-linejoin="round">
+    <path d="M210 210 L255 180 L300 205 L345 180 L390 210 L420 250 L385 285 L370 265 L370 620 L230 620 L230 265 L215 285 L180 250 Z"/>
+  </g>
+  <text x="300" y="700" font-family="system-ui, sans-serif" font-size="26" fill="#8d867c" text-anchor="middle">Seed placeholder</text>
+</svg>

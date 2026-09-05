@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --color-ink: oklch(0.21 0.01 260);
+  --color-muted: oklch(0.53 0.01 260);
+  --color-line: oklch(0.92 0.004 260);
+  --color-surface: oklch(0.99 0.002 260);
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-ink: oklch(0.95 0.005 260);
+    --color-muted: oklch(0.68 0.01 260);
+    --color-line: oklch(0.29 0.008 260);
+    --color-surface: oklch(0.17 0.008 260);
+  }
+}
+
+/* NFR: animations must respect reduced-motion (spec §7). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
