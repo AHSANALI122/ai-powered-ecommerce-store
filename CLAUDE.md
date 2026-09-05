@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A production-grade global clothing store with an agentic AI shopping assistant. `spec.md` is the authoritative design document: §1–§7 (overview, stack, ADRs, data model, security requirements SEC-1…SEC-29, NFRs) are shared context for every session; §8 lists features F0→F6 built **one at a time, in order**. Read §1–§7 plus the single feature section you are working on.
 
-**F0 (foundation), F1 (auth & accounts), F2 (catalog & SEO), F3 (cart & checkout), F4 (admin dashboard) and F5 (AI shopping assistant) are complete.** F6 (reviews, wishlist, notifications & polish) is next. Build order: `F0 → F1/F2 → F3/F4 → F5 → F6`. Each feature section carries its own _Depends on_, _Entities_, _Security focus_ (SEC ids) and a **DoD** — treat the DoD as the acceptance test.
+**F0–F6 are complete.** The one deliberate gap is Sentry/analytics, which needs an account and a DSN (spec §8 F6). Build order was `F0 → F1/F2 → F3/F4 → F5 → F6`. Each feature section carries its own _Depends on_, _Entities_, _Security focus_ (SEC ids) and a **DoD** — treat the DoD as the acceptance test.
 
 The implementation plan for F0–F3 lives at `~/.claude/plans/read-the-spec-md-and-lazy-quilt.md`.
 
@@ -33,6 +33,7 @@ npm run db:deploy        # prisma migrate deploy (release path — never `db pus
 npm run db:seed          # ~53 demo products; refuses to run when NODE_ENV=production (SEC-27)
 npm run db:studio
 npm run check:public-env # SEC-12 gate: no secret may carry a NEXT_PUBLIC_ prefix
+npm run purge:seed       # SEC-27 launch gate: reports; deletes only with -- --confirm
 ```
 
 The admin dashboard lives at `/admin` and needs a STAFF or ADMIN user; there is
@@ -41,6 +42,24 @@ no self-service path to one, by design. Promote an account by hand:
 ```bash
 npx tsx --env-file=.env -e 'const {prisma}=await import("./src/lib/db.ts"); await prisma.user.update({where:{email:"you@example.com"},data:{role:"ADMIN"}}); process.exit(0)'
 ```
+
+Transactional email needs `EMAIL_DRIVER="resend"` plus `RESEND_API_KEY` and an
+`EMAIL_FROM` on a domain verified with Resend. Development defaults to
+`EMAIL_DRIVER="log"`, which prints each message and reports success so the whole
+outbox lifecycle works with no provider; `env.ts` refuses it in production.
+
+The outbox is drained by `/api/cron/send-notifications` (Bearer `CRON_SECRET`,
+every two minutes in `vercel.json`). Nothing sends without that job running —
+in development, hit it by hand:
+
+```bash
+curl -H "Authorization: Bearer $(grep ^CRON_SECRET .env | cut -d= -f2- | tr -d '\"')"   http://localhost:3000/api/cron/send-notifications
+```
+
+Add `?replay=1` to requeue rows that exhausted their retries. That is the manual
+half of the outbox promise and is deliberately not automatic: a row reaches
+FAILED because five attempts did not work, and retrying it forever on a schedule
+hides the problem instead of surfacing it.
 
 The AI assistant needs `GOOGLE_GENERATIVE_AI_API_KEY` (aistudio.google.com/apikey)
 and a **signed-in** account. Without the key `assistantAvailable()` is false, the
@@ -77,17 +96,20 @@ src/server/pricing/           buildQuote + computeTotals (pure), tax-rate settin
 src/server/addresses/         owner-scoped address CRUD
 src/server/orders/            checkout, capture, webhook pipeline, order number, snapshots
 src/server/payments/          PaymentProvider interface + easypaisa / stripe / fake
-src/server/notifications/     the QUEUED-row outbox writer
+src/server/notifications/     outbox: queue writer, worker (lease + backoff), templates, Resend driver
 src/server/admin/             F4 services: products, categories, orders, reviews, shipping, settings, audit
 src/server/uploads/           ImageStore drivers + magic-byte type detection
 src/server/assistant/         F5: tools (the security boundary), prompt, agent, sanitize, telemetry
+src/server/reviews/           F6: submit/edit/delete + the cookie-free cached public read
+src/server/wishlist/          F6: owner-scoped list, add/remove, move-to-cart
 src/proxy.ts                  headers, guestId + csrf cookies, Origin check, silent refresh
 src/app/                      App Router: (auth), (account), /c/[...slug], /p/[slug], /search, /cart, /checkout
 src/app/api/{auth,account}/   auth + account route handlers
 src/app/api/{cart,checkout}/  cart mutations, quote, checkout, dev sandbox
+src/app/api/{reviews,wishlist}/ F6 customer writes; /api/account/product-state feeds the client widgets
 src/app/api/assistant/chat/   the streaming agent route (auth + CSRF + rate limit)
 src/app/api/webhooks/         easypaisa / stripe / fake payment callbacks
-src/app/api/cron/             expire-orders (Bearer CRON_SECRET; scheduled in vercel.json)
+src/app/api/cron/             expire-orders + send-notifications (Bearer CRON_SECRET; vercel.json)
 src/components/               auth, cart, catalog, product, home, seo, site, ui, account, admin, assistant
 src/stores/{auth,cart}.ts     display-only client state (never a token, never a price)
 tests/integration/            DB-backed capture concurrency + webhook replay
@@ -142,6 +164,17 @@ Customer-scoped tool user, not an operator. Retrieved catalog and review text is
 - **Two rate-limit buckets per request**, `user:<id>` and `ip:<addr>`, both on the `ai:chat` budget in Redis (SEC-8, SEC-18).
 - **`AI_TIER="free"` is refused in production** (SEC-13), on the same principle as `PAYMENT_PROVIDER=fake` and `IMAGE_STORE=local`: the free Gemini tier may train on prompts, and a prompt is the most PII-dense thing in an ecommerce app.
 - **Telemetry carries no message text** — one `[ai] turn` line per turn with steps, tool names, tokens, latency and outcome, under a non-reversible actor tag (SEC-25).
+
+## F6 boundaries (reviews, wishlist, notifications)
+
+- **A prerendered route may not read a cookie.** `cookies()` anywhere in `/p/[slug]` — including inside a `<Suspense>` boundary — turns the whole route dynamic and gives back F2's LCP. So the reviews block is an anonymous `unstable_cache` read tagged `cacheTags.product(slug)`, and everything about the caller (their own review, whether they saved the product) is fetched after hydration from `/api/account/product-state`. `components/product/product-personal.tsx` is that split. Check the build's route table for `● /p/[slug]` after touching that page; a `ƒ` there is the regression.
+- **`verifiedPurchase` is derived, never accepted.** From the caller's own orders with `paymentStatus: PAID` **and** `status ∈ {PROCESSING, SHIPPED, DELIVERED}` — a REFUNDED or CANCELLED order fails on status though it once had `paidAt`. It is recomputed on edit, not copied forward.
+- **An edited review returns to PENDING.** Otherwise approving a review is approving whatever text replaces it later.
+- **`recomputeProductRating` has exactly one implementation** (`src/server/admin/reviews.ts`) and is always called inside the transaction that changed what is APPROVED. It recomputes from a fresh aggregate rather than nudging the old value by a delta — an incremental update is correct only if every prior one was.
+- **The outbox worker claims with a lease, not a status.** `NotificationStatus` has no SENDING state and the schema is fixed, so the claim is a conditional `updateMany` that re-asserts QUEUED and pushes `nextAttemptAt` past the send timeout. Two overlapping cron runs divide the batch; a crashed worker's row becomes due again. `attempts` increments at *claim* time so a poison row cannot occupy the worker forever.
+- **A permanent rejection is not retried.** The `EmailSender` outcome carries `retryable`: 429 and 5xx go back in the queue, other 4xx go straight to FAILED. Retrying a 422 for a malformed address five times only delays the moment somebody notices.
+- **Templates escape everything they interpolate and only emit same-origin links.** A display name is user-chosen text and a webmail client is a browser (`render.ts`).
+- **The wishlist is signed-in only** and has no guest path, unlike the cart. Move-to-cart re-resolves the variant with `productId` in the same `where`, so a variant id from another product matches nothing.
 
 ## Decisions locked
 

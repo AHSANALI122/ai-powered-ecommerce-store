@@ -80,7 +80,7 @@ export default async function AccountPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Orders and addresses</h2>
+        <h2 className="text-lg font-medium">Orders, addresses and saved items</h2>
         <div className="flex flex-wrap gap-3">
           <Link
             href="/account/orders"
@@ -93,6 +93,12 @@ export default async function AccountPage() {
             className="rounded-md border border-[var(--color-line)] px-4 py-2 text-sm font-medium"
           >
             Your addresses
+          </Link>
+          <Link
+            href="/account/wishlist"
+            className="rounded-md border border-[var(--color-line)] px-4 py-2 text-sm font-medium"
+          >
+            Your wishlist
           </Link>
         </div>
       </section>

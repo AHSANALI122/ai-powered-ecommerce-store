@@ -96,6 +96,20 @@ const serverSchema = z.object({
    */
   AI_MAX_STEPS: z.coerce.number().int().min(1).max(12).default(6),
 
+  // --- Transactional email (F6) --------------------------------------------
+  /**
+   * Which driver the outbox worker sends through. `log` prints the message and
+   * reports success, so the whole queue lifecycle works on a machine with no
+   * mail provider — and, like `PAYMENT_PROVIDER=fake` and `IMAGE_STORE=local`,
+   * boot refuses it in production. A deployment that logs password resets into
+   * stdout instead of sending them fails silently until a customer is locked
+   * out.
+   */
+  EMAIL_DRIVER: z.enum(["log", "resend"]).default("log"),
+  RESEND_API_KEY: z.string().min(1).optional(),
+  /** Envelope sender. Must be an address on a domain verified with Resend. */
+  EMAIL_FROM: z.string().min(3).default("orders@example.com"),
+
   PEXELS_API_KEY: z.string().min(1).optional(),
 
   APP_URL: z.url().default("http://localhost:3000"),
@@ -216,6 +230,19 @@ function loadServerEnv(): ServerEnv {
     }
     if (parsed.data.IMAGE_STORE === "blob" && !parsed.data.BLOB_READ_WRITE_TOKEN) {
       throw new Error('IMAGE_STORE="blob" is missing: BLOB_READ_WRITE_TOKEN');
+    }
+
+    // Same principle again, for the outbox (F6). The log driver reports every
+    // message as sent, so a production deployment on it would drain the queue
+    // into stdout and mark verification and reset mail SENT — the worst
+    // possible failure, because the outbox would look healthy.
+    if (parsed.data.EMAIL_DRIVER === "log") {
+      throw new Error(
+        'EMAIL_DRIVER="log" cannot be used in production: it discards mail and reports success. Set EMAIL_DRIVER="resend".',
+      );
+    }
+    if (parsed.data.EMAIL_DRIVER === "resend" && !parsed.data.RESEND_API_KEY) {
+      throw new Error('EMAIL_DRIVER="resend" is missing: RESEND_API_KEY');
     }
 
     // The assistant is optional, but a *enabled* assistant in production must

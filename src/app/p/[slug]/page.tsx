@@ -9,6 +9,8 @@ import { runtimeRoute } from "@/lib/routes";
 import { getProductBySlug, listProductSlugs } from "@/server/catalog/queries";
 import { VariantSelector } from "@/components/product/variant-selector";
 import { BreadcrumbJsonLd, ProductJsonLd } from "@/components/seo/json-ld";
+import { ProductReviews } from "@/components/reviews/product-reviews";
+import { ProductPersonal } from "@/components/product/product-personal";
 
 /**
  * Product detail (F2).
@@ -184,6 +186,11 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
             <VariantSelector variants={product.variants} currency={currency} />
           </Suspense>
 
+          {/* A client component, not a Suspense boundary around a server one:
+              reading the session here would make this prerendered route
+              dynamic. It reserves its height so nothing shifts (CLS). */}
+          <ProductPersonal productId={product.id} slot="wishlist" />
+
           <section className="flex flex-col gap-2 border-t border-[var(--color-line)] pt-6">
             <h2 className="text-sm font-medium">Description</h2>
             <p className="max-w-prose text-sm leading-relaxed text-[var(--color-muted)]">
@@ -206,6 +213,23 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
           ) : null}
         </div>
       </div>
+
+      {/* Streamed in: reviews are per-request (they include the caller's own,
+          in any status), and the rest of this page stays static (F2). */}
+      <Suspense
+        fallback={
+          <div className="border-t border-[var(--color-line)] pt-10">
+            <p className="text-sm text-[var(--color-muted)]">Loading reviews…</p>
+          </div>
+        }
+      >
+        <ProductReviews
+          productId={product.id}
+          slug={product.slug}
+          ratingAvg={Number(product.ratingAvg)}
+          ratingCount={product.ratingCount}
+        />
+      </Suspense>
     </div>
   );
 }

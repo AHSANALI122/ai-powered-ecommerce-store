@@ -815,6 +815,18 @@ function stockFor(seed: string): number {
 type PexelsPhoto = { id: number; src: { large: string; medium: string } };
 
 /**
+ * Photo ids already handed to a product, so two products never share an image.
+ *
+ * Pexels ranks by relevance, so neighbouring queries ("mens hoodie" and
+ * "mens sweatshirt") routinely return the same top photo. Reusing it is not
+ * just cosmetic: `externalId` was the photo id and `@@unique([source,
+ * externalId])` made the second product a P2002. The identity of a demo row is
+ * its slug, not whichever stock photo happened to illustrate it, so the id is
+ * only used for de-duplicating imagery now.
+ */
+const usedPhotoIds = new Set<number>();
+
+/**
  * Fetches product imagery from Pexels when a key is configured. Without a key
  * the catalogue still seeds, using a local placeholder, so a fresh clone works
  * offline.
@@ -822,32 +834,32 @@ type PexelsPhoto = { id: number; src: { large: string; medium: string } };
 async function fetchImages(
   query: string,
   apiKey: string | undefined,
-): Promise<{ images: string[]; externalId: string | null }> {
-  if (!apiKey) return { images: [PLACEHOLDER_IMAGE], externalId: null };
+): Promise<string[]> {
+  if (!apiKey) return [PLACEHOLDER_IMAGE];
 
   try {
     const url = new URL("https://api.pexels.com/v1/search");
     url.searchParams.set("query", query);
-    url.searchParams.set("per_page", "2");
+    // Over-fetch: the first few results may already belong to another product.
+    url.searchParams.set("per_page", "12");
     url.searchParams.set("orientation", "portrait");
 
     const response = await fetch(url, { headers: { Authorization: apiKey } });
     if (!response.ok) {
       console.warn(`  Pexels ${response.status} for "${query}"; using placeholder.`);
-      return { images: [PLACEHOLDER_IMAGE], externalId: null };
+      return [PLACEHOLDER_IMAGE];
     }
 
     const body = (await response.json()) as { photos?: PexelsPhoto[] };
-    const photos = body.photos ?? [];
-    if (photos.length === 0) return { images: [PLACEHOLDER_IMAGE], externalId: null };
+    const fresh = (body.photos ?? []).filter((photo) => !usedPhotoIds.has(photo.id));
+    if (fresh.length === 0) return [PLACEHOLDER_IMAGE];
 
-    return {
-      images: photos.map((photo) => photo.src.large),
-      externalId: String(photos[0]!.id),
-    };
+    const chosen = fresh.slice(0, 2);
+    for (const photo of chosen) usedPhotoIds.add(photo.id);
+    return chosen.map((photo) => photo.src.large);
   } catch (error) {
     console.warn(`  Pexels request failed for "${query}":`, error);
-    return { images: [PLACEHOLDER_IMAGE], externalId: null };
+    return [PLACEHOLDER_IMAGE];
   }
 }
 
@@ -907,7 +919,7 @@ async function main(): Promise<void> {
     if (!categoryId) throw new Error(`Unknown category: ${product.category}`);
 
     const slug = slugify(product.title);
-    const { images, externalId } = await fetchImages(product.imageQuery, apiKey);
+    const images = await fetchImages(product.imageQuery, apiKey);
 
     const variants = product.colours.flatMap((colour, colourIndex) =>
       product.sizes.map((size, sizeIndex) => ({
@@ -953,7 +965,9 @@ async function main(): Promise<void> {
         isFeatured: product.featured ?? false,
         categoryId,
         source: SEED_SOURCE,
-        externalId: externalId ?? slug,
+        // The slug, never the photo id: `@@unique([source, externalId])` must
+        // key on the demo product itself, not on its illustration.
+        externalId: slug,
         variants: { create: variants },
       },
     });

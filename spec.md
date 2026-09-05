@@ -209,25 +209,31 @@ The skeleton everything builds on.
 
 ### F6 — Reviews, Wishlist, Notifications & Polish
 *Depends on:* F0–F4 · *Entities:* Review, WishlistItem, Notification, Product (ratingAvg) · *Security focus:* SEC-8, 15, 16, 18, 23, 27.
+
+> **Built**, except the observability bullet noted below. No migration was needed — the schema already carried every F6 entity. Two structural notes worth carrying forward. First, `verifiedPurchase` is derived in `src/server/reviews/service.ts` from the caller's own PAID orders in `PROCESSING|SHIPPED|DELIVERED`; a REFUNDED or CANCELLED order fails on status even though it once had `paidAt`. Second, the product page's review block reads **no cookie**: `cookies()` anywhere in a prerendered route makes the whole route dynamic, so the published reviews are a tagged cached read and everything about the caller is fetched client-side after hydration (`/api/account/product-state`). `/p/[slug]` stays `●`.
+
 *Reviews*
-- [ ] Submit (auth + verified email); **`verifiedPurchase` computed server-side** from paid/delivered orders — never client-claimed; refunded/cancelled don't grant it.
-- [ ] One review per (product, user); moderation `status` (PENDING → APPROVED before shown).
-- [ ] Approve/edit/delete → **recompute `ratingAvg`/`ratingCount` transactionally** (no drift).
-- [ ] Rate-limit submission (SEC-8, 18).
+- [x] Submit (auth + verified email); **`verifiedPurchase` computed server-side** from paid/delivered orders — never client-claimed; refunded/cancelled don't grant it.
+- [x] One review per (product, user) — the unique constraint arbitrates rather than a read-then-write; moderation `status` (PENDING → APPROVED before shown). An **edit returns the review to PENDING**, so approved text cannot be swapped afterwards.
+- [x] Approve/edit/delete → **recompute `ratingAvg`/`ratingCount` transactionally** through the single implementation in `src/server/admin/reviews.ts` (no drift, no second copy).
+- [x] Rate-limit submission on two buckets, user and IP (SEC-8, 18).
 
 *Wishlist*
-- [ ] Add/remove; move-to-cart; unique per (user, product); owner-scoped (SEC-23).
+- [x] Add/remove; move-to-cart; unique per (user, product); owner-scoped (SEC-23). The move re-resolves the variant against the wishlisted product and goes through the ordinary `addItem` path, so it cannot add what the cart endpoint would refuse. Signed-in only — a cart survives on a cookie because it must, a saved list only earns its keep with an account.
 
 *Notifications (email outbox)*
-- [ ] Worker sends QUEUED rows via Resend, flips SENT/FAILED, **retries** on FAILED.
-- [ ] Covers welcome, verification, reset, order confirmation, shipped/delivered.
-- [ ] A provider blip must not lose an email (outbox replay).
+- [x] Worker sends QUEUED rows via Resend, flips SENT/FAILED, **retries** with capped exponential backoff (~1m → 2h, 5 attempts).
+- [x] Covers welcome, verification, reset, order confirmation, shipped/delivered, refunded.
+- [x] A provider blip must not lose an email (outbox replay) — `requeueFailed`, reachable at `/api/cron/send-notifications?replay=1`. Proven in `tests/integration/outbox.test.ts` against real Postgres, including two workers claiming concurrently.
+- [x] Claiming is a **lease**, not a flag: `NotificationStatus` has no SENDING state, so the claim is a conditional update that pushes `nextAttemptAt` forward. A crashed worker's row simply becomes due again.
+- [x] `EMAIL_DRIVER="log"` is refused in production, on the same principle as `PAYMENT_PROVIDER=fake` — a deploy that logs password resets and marks them SENT is the worst failure, because the outbox looks healthy.
 
 *Polish (NFR)*
-- [ ] Homepage animations (Framer Motion) respecting `prefers-reduced-motion`, no LCP/CLS regression.
-- [ ] Security headers finalized (SEC-15); Sentry + analytics; accessibility pass; final security review vs §6.
-- [ ] **Launch gate:** purge seed/demo data (`source="pexels"`) + stock imagery before go-live (SEC-27).
-- **DoD:** reviews verified + moderated with accurate cached ratings; wishlist owner-scoped; no email lost across a provider blip; Lighthouse passes perf/SEO/a11y; demo data gone before launch.
+- [x] Homepage animations (`motion`) respecting `prefers-reduced-motion` — read explicitly, since a JS library writes inline styles that sail past the CSS media query. The hero is deliberately un-animated: it owns the LCP element. Only `opacity`/`transform` move, so no CLS.
+- [x] Security headers finalised (SEC-15). `script-src` keeps `'unsafe-inline'` **by decision**: nonces force dynamic rendering and would disable ISR across the catalogue, and `experimental.sri` was measured on this build and cannot cover Next's inline bootstrap scripts. Everything reachable from an injected script is closed instead — `connect-src 'self'`, `frame-src`/`child-src`/`object-src 'none'`, `worker-src`, `base-uri`, plus COOP/CORP. The reasoning is recorded in `src/proxy.ts`.
+- [ ] **Sentry + analytics.** Not wired: both need an account and a DSN, and an unconfigured SDK is a dependency that does nothing. The seams exist (`telemetry.ts` for AI, structured `[admin]`/`[outbox]`/`[ai]` log lines elsewhere).
+- [x] **Launch gate:** `npm run purge:seed` reports by default and deletes only with `--confirm`; it refuses outright when an OrderItem references a demo product, since that means someone was sold one (SEC-27).
+- **DoD:** reviews verified + moderated with accurate cached ratings; wishlist owner-scoped; no email lost across a provider blip; demo data purgeable before launch. Lighthouse is the one DoD clause not machine-verified here.
 
 ---
 

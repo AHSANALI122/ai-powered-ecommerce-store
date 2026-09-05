@@ -7,6 +7,7 @@ import {
 } from "@/server/catalog/queries";
 import { ProductGrid } from "@/components/catalog/product-card";
 import { HeroCarousel, type HeroSlide } from "@/components/home/hero-carousel";
+import { Reveal } from "@/components/home/reveal";
 
 /**
  * Home.
@@ -83,28 +84,35 @@ export default async function HomePage() {
       <HeroCarousel slides={toSlides(featured.length > 0 ? featured : arrivals)} />
 
       {featured.length > 0 ? (
-        <section className="flex flex-col gap-6">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2 className="text-xl font-semibold tracking-tight">Featured</h2>
-            <Link href="/c/men" className="text-sm underline underline-offset-4">
-              Shop men
-            </Link>
-          </div>
-          {/* The carousel owns the LCP image, so nothing below it is
-              prioritised — competing priorities are the same as none. */}
-          <ProductGrid products={featured} currency={currency} />
-        </section>
+        // The hero is deliberately outside every Reveal: it holds the LCP
+        // element, and an element that starts transparent cannot be a fast
+        // largest paint.
+        <Reveal>
+          <section className="flex flex-col gap-6">
+            <div className="flex items-baseline justify-between gap-4">
+              <h2 className="text-xl font-semibold tracking-tight">Featured</h2>
+              <Link href="/c/men" className="text-sm underline underline-offset-4">
+                Shop men
+              </Link>
+            </div>
+            {/* The carousel owns the LCP image, so nothing below it is
+                prioritised — competing priorities are the same as none. */}
+            <ProductGrid products={featured} currency={currency} />
+          </section>
+        </Reveal>
       ) : null}
 
-      <section className="flex flex-col gap-6">
-        <div className="flex items-baseline justify-between gap-4">
-          <h2 className="text-xl font-semibold tracking-tight">New arrivals</h2>
-          <Link href="/c/women" className="text-sm underline underline-offset-4">
-            Shop women
-          </Link>
-        </div>
-        <ProductGrid products={arrivals} currency={currency} />
-      </section>
+      <Reveal delay={0.05}>
+        <section className="flex flex-col gap-6">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className="text-xl font-semibold tracking-tight">New arrivals</h2>
+            <Link href="/c/women" className="text-sm underline underline-offset-4">
+              Shop women
+            </Link>
+          </div>
+          <ProductGrid products={arrivals} currency={currency} />
+        </section>
+      </Reveal>
     </div>
   );
 }

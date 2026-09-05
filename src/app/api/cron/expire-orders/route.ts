@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/db";
-import { serverEnv } from "@/lib/env";
+import { authorizeCron } from "@/lib/cron-auth";
 import { jsonError, jsonOk } from "@/lib/http";
 
 export const runtime = "nodejs";
@@ -25,24 +24,8 @@ export const dynamic = "force-dynamic";
  */
 const BATCH_LIMIT = 500;
 
-function authorized(request: NextRequest): boolean {
-  const secret = serverEnv().CRON_SECRET;
-  if (!secret) return false;
-
-  const header = request.headers.get("authorization") ?? "";
-  const presented = header.startsWith("Bearer ") ? header.slice(7) : "";
-
-  const expectedBuffer = Buffer.from(secret, "utf8");
-  const presentedBuffer = Buffer.from(presented, "utf8");
-  if (expectedBuffer.length !== presentedBuffer.length) {
-    timingSafeEqual(expectedBuffer, expectedBuffer);
-    return false;
-  }
-  return timingSafeEqual(expectedBuffer, presentedBuffer);
-}
-
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  if (!authorized(request)) {
+  if (!authorizeCron(request)) {
     return jsonError("UNAUTHORIZED", "Not permitted.");
   }
 

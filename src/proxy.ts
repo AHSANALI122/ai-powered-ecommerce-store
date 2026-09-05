@@ -20,9 +20,31 @@ import { generateCsrfToken, isSafeMethod, isSameOriginRequest } from "@/lib/csrf
  * HMAC) and never touches the database. Real authorisation happens in the route
  * or page, against the user row; this layer only keeps obvious traffic out.
  *
- * The CSP is still F0's: permissive about inline styles because Next injects
- * them. F6 finalises it (nonce-based script-src, tightened connect-src once the
- * payment and AI origins are known).
+ * **The CSP, finalised (F6, SEC-15).** The one decision worth recording is why
+ * `script-src` still carries `'unsafe-inline'`, because both alternatives were
+ * tried and both cost more than they buy:
+ *
+ *  - **Nonces** are the textbook answer, and Next supports them — but a nonce
+ *    is per-request, so using one forces every page to render dynamically.
+ *    That would disable `generateStaticParams`, ISR and CDN caching across the
+ *    whole catalogue, which is the architecture F2 exists to provide and the
+ *    Core Web Vitals the NFRs ask for. Trading the storefront's performance
+ *    for a directive is not a good trade on a catalogue of public product
+ *    pages.
+ *  - **Subresource Integrity** (`experimental.sri`) promises a strict
+ *    `script-src` while keeping static rendering. Measured on this app's build
+ *    it does not deliver one: it adds `integrity` to most chunks but not all,
+ *    and it cannot cover the three inline bootstrap scripts React and Next
+ *    emit to stream the flight payload — which are exactly what
+ *    `'unsafe-inline'` is there for. Partial integrity plus an experimental
+ *    flag on a payment-handling app is not worth an unchanged directive.
+ *
+ * So `script-src` stays as it is, and everything reachable *from* an injected
+ * script is closed instead: `connect-src 'self'` (the assistant streams
+ * through our own route, so no AI origin is needed), `object-src`,
+ * `frame-src`, `worker-src` and `base-uri` are all locked down, and
+ * `form-action` names the payment hosts explicitly. That is the half of the
+ * defence an inline-script allowance does not weaken.
  */
 
 /** Signed-in only. The page still calls requireUser(); this saves a render. */
@@ -66,7 +88,17 @@ function contentSecurityPolicy(isDev: boolean): string {
     // where F4's admin uploads live when IMAGE_STORE=blob.
     "img-src 'self' data: blob: https://images.pexels.com https://*.public.blob.vercel-storage.com",
     "font-src 'self' data:",
+    // The assistant streams through /api/assistant/chat, so the browser never
+    // talks to Google directly and no AI origin belongs here.
     `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
+    "media-src 'self'",
+    "manifest-src 'self'",
+    // Next may instantiate a worker from a blob URL; nothing else may.
+    "worker-src 'self' blob:",
+    // Nothing in this application embeds a frame. A payment hand-off is a
+    // top-level redirect, which `form-action` below covers instead.
+    "frame-src 'none'",
+    "child-src 'none'",
     "frame-ancestors 'none'",
     `form-action 'self' ${paymentFormOrigins().join(" ")}`,
     "base-uri 'self'",
@@ -82,8 +114,14 @@ function applySecurityHeaders(response: NextResponse, isDev: boolean): void {
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set(
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(), payment=()",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
   );
+  // A cross-origin window opened from here cannot reach back into this one,
+  // and this document is not readable by one that embeds it.
+  response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  response.headers.set("Cross-Origin-Resource-Policy", "same-origin");
+  // No speculative DNS for hosts a page happens to mention.
+  response.headers.set("X-DNS-Prefetch-Control", "off");
   if (!isDev) {
     response.headers.set(
       "Strict-Transport-Security",
