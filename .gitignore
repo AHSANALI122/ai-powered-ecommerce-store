@@ -28,3 +28,6 @@ playwright-report/
 .vercel
 *.tsbuildinfo
 .eslintcache
+
+# logs from a backgrounded dev server
+*.log

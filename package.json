@@ -27,15 +27,20 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "@node-rs/argon2": "^2.2.0",
     "@prisma/adapter-neon": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.4",
     "decimal.js": "^10.6.0",
+    "embla-carousel-autoplay": "^8.6.0",
+    "embla-carousel-react": "^8.6.0",
+    "jose": "^6.2.12",
     "next": "^16.3.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "zod": "^4.5.4"
+    "zod": "^4.5.4",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

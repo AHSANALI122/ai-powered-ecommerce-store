@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { publicEnv } from "@/lib/env";
+import { SessionLoader } from "@/components/auth/session-loader";
+import { AccountNav } from "@/components/site/account-nav";
+import { CategoryNav, SearchForm } from "@/components/site/category-nav";
+import { WebSiteJsonLd } from "@/components/seo/json-ld";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,6 +18,13 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
+/**
+ * The shell is deliberately identity-free on the server: nothing here reads
+ * cookies, so a catalogue page can still be prerendered and ISR-cached (F2).
+ * The category nav is a database read with no request-time API, which is
+ * cacheable; the account state is filled in by the client afterwards (see
+ * session-loader.tsx).
+ */
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -26,13 +37,26 @@ export default function RootLayout({
         >
           Skip to content
         </a>
+        <SessionLoader />
+        <WebSiteJsonLd
+          baseUrl={publicEnv.NEXT_PUBLIC_APP_URL}
+          name={publicEnv.NEXT_PUBLIC_SITE_NAME}
+        />
         <div className="mx-auto flex min-h-full max-w-6xl flex-col px-6">
-          <header className="flex items-center justify-between border-b border-[var(--color-line)] py-6">
-            <Link href="/" className="text-lg font-semibold tracking-tight">
-              {publicEnv.NEXT_PUBLIC_SITE_NAME}
-            </Link>
-            <nav aria-label="Primary" className="text-sm text-[var(--color-muted)]">
-              <span>Catalogue arrives in F2</span>
+          <header className="flex flex-col gap-4 border-b border-[var(--color-line)] py-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <Link href="/" className="text-lg font-semibold tracking-tight">
+                {publicEnv.NEXT_PUBLIC_SITE_NAME}
+              </Link>
+              <div className="flex items-center gap-6">
+                <SearchForm />
+                <nav aria-label="Account">
+                  <AccountNav />
+                </nav>
+              </div>
+            </div>
+            <nav aria-label="Primary">
+              <CategoryNav />
             </nav>
           </header>
           <main id="main" className="flex-1 py-10">

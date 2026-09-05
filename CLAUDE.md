@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A production-grade global clothing store with an agentic AI shopping assistant. `spec.md` is the authoritative design document: §1–§7 (overview, stack, ADRs, data model, security requirements SEC-1…SEC-29, NFRs) are shared context for every session; §8 lists features F0→F6 built **one at a time, in order**. Read §1–§7 plus the single feature section you are working on.
 
-**F0 (foundation) is complete.** F1 (auth) is next. Build order: `F0 → F1/F2 → F3/F4 → F5 → F6`. Each feature section carries its own _Depends on_, _Entities_, _Security focus_ (SEC ids) and a **DoD** — treat the DoD as the acceptance test.
+**F0 (foundation), F1 (auth & accounts) and F2 (catalog & SEO) are complete.** F3 (cart & checkout) is next. Build order: `F0 → F1/F2 → F3/F4 → F5 → F6`. Each feature section carries its own _Depends on_, _Entities_, _Security focus_ (SEC ids) and a **DoD** — treat the DoD as the acceptance test.
 
 The implementation plan for F0–F3 lives at `~/.claude/plans/read-the-spec-md-and-lazy-quilt.md`.
 
@@ -52,8 +52,17 @@ prisma/seed.ts                demo catalogue, guarded against production
 prisma.config.ts              Prisma 7 CLI config (schema path, seed command, datasource URL)
 src/generated/prisma/         generated client — gitignored, regenerate with `npx prisma generate`
 src/lib/{env,db,redis,money,rate-limit,http}.ts
-src/proxy.ts                  security headers + guestId cookie
-src/app/                      App Router: layout, error boundaries, /api/health
+src/lib/auth/                 tokens, password, session rotation, cookies, guards
+src/lib/{csrf,safe-redirect,routes,cache-tags}.ts
+src/lib/validation/           Zod schemas (auth bodies, catalog query)
+src/server/auth/service.ts    register / login / verify / reset flows
+src/server/catalog/queries.ts every catalogue read, incl. the sort whitelist
+src/server/notifications/     the QUEUED-row outbox writer
+src/proxy.ts                  headers, guestId + csrf cookies, Origin check, silent refresh
+src/app/                      App Router: (auth), (account), /c/[...slug], /p/[slug], /search
+src/app/api/{auth,account}/   auth + account route handlers
+src/components/               auth, catalog, product, home, seo, site, ui
+src/stores/auth.ts            display-only client session state (never a token)
 ```
 
 ## Conventions
@@ -64,6 +73,8 @@ src/app/                      App Router: layout, error boundaries, /api/health
 - **Ownership** — user-owned rows (`Order`, `Address`, `Cart`, `Session`) are filtered by `userId` in the `where` clause, never after fetching (SEC-23).
 - **Errors** — handlers return `{ error: { code, message } }` with generic messages; internal detail goes to logs only (SEC-9, SEC-26).
 - **Prisma client** — import from `@/generated/prisma/client`, use the `prisma` singleton in `src/lib/db.ts`. Prisma 7 requires a driver adapter; the Neon adapter is configured there.
+- **Catalogue caching** — reads that feed a prerendered page are wrapped in `unstable_cache` with the tags from `src/lib/cache-tags.ts`, which is what makes F4's `revalidateTag` work (SEC-11). An untagged read leaves the revalidate timer as the only lever. Filtered listing and search are deliberately uncached.
+- **`export const revalidate` must be a literal.** Next resolves it by static analysis, so `revalidate = CATALOG_REVALIDATE_SECONDS` (or `60 * 5`) fails the build with "Invalid segment configuration export detected" — with no indication of which file. The pages repeat `300`; `src/lib/cache-tags.test.ts` guards the drift.
 
 ## Architecture constraints that cross many files
 
