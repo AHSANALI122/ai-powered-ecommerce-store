@@ -27,6 +27,8 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.64",
+    "@ai-sdk/react": "^4.0.96",
     "@neondatabase/serverless": "^1.1.0",
     "@node-rs/argon2": "^2.2.0",
     "@prisma/adapter-neon": "^7.10.0",
@@ -34,6 +36,7 @@
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.4",
     "@vercel/blob": "^2.8.0",
+    "ai": "^7.0.93",
     "decimal.js": "^10.6.0",
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",

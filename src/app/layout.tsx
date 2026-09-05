@@ -6,6 +6,8 @@ import { AccountNav } from "@/components/site/account-nav";
 import { CategoryNav, SearchForm } from "@/components/site/category-nav";
 import { CartLink } from "@/components/cart/cart-link";
 import { WebSiteJsonLd } from "@/components/seo/json-ld";
+import { AssistantLauncher } from "@/components/assistant/assistant-launcher";
+import { assistantAvailable } from "@/server/assistant/config";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -68,6 +70,13 @@ export default function RootLayout({
             © {new Date().getFullYear()} {publicEnv.NEXT_PUBLIC_SITE_NAME}
           </footer>
         </div>
+        {/*
+          Outside the page container so its fixed positioning is not scoped by
+          an ancestor transform, and rendered last so it is never in the way of
+          the LCP element. `assistantAvailable()` reads env, not cookies, so
+          this stays a static read and the catalogue pages stay cacheable (F2).
+        */}
+        <AssistantLauncher available={assistantAvailable()} />
       </body>
     </html>
   );

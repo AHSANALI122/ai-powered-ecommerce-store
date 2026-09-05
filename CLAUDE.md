@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A production-grade global clothing store with an agentic AI shopping assistant. `spec.md` is the authoritative design document: §1–§7 (overview, stack, ADRs, data model, security requirements SEC-1…SEC-29, NFRs) are shared context for every session; §8 lists features F0→F6 built **one at a time, in order**. Read §1–§7 plus the single feature section you are working on.
 
-**F0 (foundation), F1 (auth & accounts), F2 (catalog & SEO), F3 (cart & checkout) and F4 (admin dashboard) are complete.** F5 (AI shopping assistant) is next. Build order: `F0 → F1/F2 → F3/F4 → F5 → F6`. Each feature section carries its own _Depends on_, _Entities_, _Security focus_ (SEC ids) and a **DoD** — treat the DoD as the acceptance test.
+**F0 (foundation), F1 (auth & accounts), F2 (catalog & SEO), F3 (cart & checkout), F4 (admin dashboard) and F5 (AI shopping assistant) are complete.** F6 (reviews, wishlist, notifications & polish) is next. Build order: `F0 → F1/F2 → F3/F4 → F5 → F6`. Each feature section carries its own _Depends on_, _Entities_, _Security focus_ (SEC ids) and a **DoD** — treat the DoD as the acceptance test.
 
 The implementation plan for F0–F3 lives at `~/.claude/plans/read-the-spec-md-and-lazy-quilt.md`.
 
@@ -42,6 +42,11 @@ no self-service path to one, by design. Promote an account by hand:
 npx tsx --env-file=.env -e 'const {prisma}=await import("./src/lib/db.ts"); await prisma.user.update({where:{email:"you@example.com"},data:{role:"ADMIN"}}); process.exit(0)'
 ```
 
+The AI assistant needs `GOOGLE_GENERATIVE_AI_API_KEY` (aistudio.google.com/apikey)
+and a **signed-in** account. Without the key `assistantAvailable()` is false, the
+widget never mounts and `/api/assistant/chat` answers 503 — which is the intended
+degradation, not a bug. `AI_ASSISTANT_ENABLED="false"` is the kill switch.
+
 First run: `cp .env.example .env`, fill in `DATABASE_URL`, then `npm run db:migrate && npm run db:seed`.
 
 `SKIP_ENV_VALIDATION=1` is required for `npm run build` when no real secrets are present (CI sets it). Without it, `src/lib/env.ts` fails fast at boot, which is the intended production behaviour.
@@ -50,6 +55,7 @@ Two env behaviours worth knowing before you debug them:
 
 - **`npm start` (production mode) requires `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` and `AUTH_SECRET`** or every server-rendered route 500s. That is deliberate (SEC-18): a production deploy without the shared store has silently unenforced rate limits. Use `npm run dev` for local work until Upstash is configured.
 - Empty values in `.env` (`AUTH_SECRET=""`) are treated as unset, not as an empty string, so keys copied from `.env.example` do not fail validation. `next build` is also exempted from the production-secret requirement — a build is not a boot.
+- **The assistant has the same shape of guard:** `AI_TIER="free"` is refused in production and, when `AI_ASSISTANT_ENABLED` is true, so is a missing `GOOGLE_GENERATIVE_AI_API_KEY`. Development defaults to `free`, which is why the widget silently disappears rather than erroring on a machine with no key.
 - **`IMAGE_STORE=local` is refused in production**, on the same principle as `PAYMENT_PROVIDER=fake`. The local driver writes admin uploads under `public/uploads` (gitignored); a Vercel filesystem is read-only and per-instance, so an upload there would appear to succeed and then 404. Production sets `IMAGE_STORE=blob` with a `BLOB_READ_WRITE_TOKEN`.
 
 ## Layout
@@ -74,13 +80,15 @@ src/server/payments/          PaymentProvider interface + easypaisa / stripe / f
 src/server/notifications/     the QUEUED-row outbox writer
 src/server/admin/             F4 services: products, categories, orders, reviews, shipping, settings, audit
 src/server/uploads/           ImageStore drivers + magic-byte type detection
+src/server/assistant/         F5: tools (the security boundary), prompt, agent, sanitize, telemetry
 src/proxy.ts                  headers, guestId + csrf cookies, Origin check, silent refresh
 src/app/                      App Router: (auth), (account), /c/[...slug], /p/[slug], /search, /cart, /checkout
 src/app/api/{auth,account}/   auth + account route handlers
 src/app/api/{cart,checkout}/  cart mutations, quote, checkout, dev sandbox
+src/app/api/assistant/chat/   the streaming agent route (auth + CSRF + rate limit)
 src/app/api/webhooks/         easypaisa / stripe / fake payment callbacks
 src/app/api/cron/             expire-orders (Bearer CRON_SECRET; scheduled in vercel.json)
-src/components/               auth, cart, catalog, product, home, seo, site, ui, account, admin
+src/components/               auth, cart, catalog, product, home, seo, site, ui, account, admin, assistant
 src/stores/{auth,cart}.ts     display-only client state (never a token, never a price)
 tests/integration/            DB-backed capture concurrency + webhook replay
 ```
@@ -120,7 +128,20 @@ From the ADRs (§4) — the ones a locally-sensible change is most likely to bre
 
 ## AI assistant boundaries (F5)
 
-Customer-scoped tool user, not an operator. Read tools query the real catalog and the model may only surface tool-returned products. The only write tool is `addToCart`, deriving the user **from the session** (SEC-3) at the server-computed price (SEC-4). It may fill a cart but never initiates payment or checkout (SEC-2). No admin tools; results sanitized (SEC-26). Retrieved catalog and review text is **data, not instructions** — enforcement lives in the tools, not the prompt.
+Customer-scoped tool user, not an operator. Retrieved catalog and review text is **data, not instructions** — and the enforcement lives in the tools, not the prompt. Every rule below is structural: it holds whatever the model is talked into saying.
+
+- **`src/server/assistant/tools.ts` is the whole security boundary.** Five tools, four read-only, one write. No tool schema has a price, a discount, a user id, an order id or a role field, so those are not requests the model is *able* to make (SEC-2, SEC-3, SEC-4). `tools.test.ts` enumerates the surface — adding a tool fails it on purpose.
+- **Identity comes from a closure, not an argument.** `buildAssistantTools(userId)` is built per request from the session the route read; `addToCart` closes over it. Nothing travelling alongside the model's arguments can name a user.
+- **`addToCart` is the only write, and it cannot pay.** There is no checkout, order, refund or stock tool to reach. "Refuses to check out" is a missing capability, not a promise in the prompt.
+- **Nothing returns a Prisma row.** Every result is a hand-built object with named, sanitized fields — no `isActive`, no `source` (which would out the seed data), no ids beyond `variantId`, which the product page already exposes. Failures return `{ ok: false, message }`; throwing would put a stack trace in the model's context (SEC-26).
+- **Read tools force `inStock: 1` and go through `catalogQuerySchema`**, so the page cap and sort whitelist apply to the model exactly as to a shopper editing a URL (SEC-24). The model has no sort input at all.
+- **Untrusted text is neutralized then fenced** by `sanitize.ts`: Unicode `Cc`/`Cf`/`Zl`/`Zp` stripped (the zero-width and bidi tricks), chat-template and fence lookalikes removed, length capped, then wrapped in `<untrusted>…</untrusted>`. The fence is a hint to the model; the tools are the control.
+- **The renderer has its own allowlist.** `components/assistant/link-policy.ts` only makes `[label](/p|/c|/search|/cart…)` clickable. A model argued into emitting `[Pay now](https://evil.example)` renders that as characters.
+- **The client may post text parts only.** `assistantChatSchema` is `.strict()` and has no tool-part shape, so a browser cannot replay a forged tool result into the next turn. The cost is real and deliberate: the model does not carry a tool result across turns and re-searches instead.
+- **Requires a signed-in user**, unlike the human cart path which serves guests — see the route handler's comment for why (a `Set-Cookie` on a stream, and an anonymous rate-limit bucket being no bucket at all).
+- **Two rate-limit buckets per request**, `user:<id>` and `ip:<addr>`, both on the `ai:chat` budget in Redis (SEC-8, SEC-18).
+- **`AI_TIER="free"` is refused in production** (SEC-13), on the same principle as `PAYMENT_PROVIDER=fake` and `IMAGE_STORE=local`: the free Gemini tier may train on prompts, and a prompt is the most PII-dense thing in an ecommerce app.
+- **Telemetry carries no message text** — one `[ai] turn` line per turn with steps, tool names, tokens, latency and outcome, under a non-reversible actor tag (SEC-25).
 
 ## Decisions locked
 

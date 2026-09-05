@@ -64,6 +64,38 @@ const serverSchema = z.object({
     .max(20 * 1024 * 1024)
     .default(5 * 1024 * 1024),
 
+  // --- AI shopping assistant (F5) ------------------------------------------
+  /**
+   * Kill switch. Off means the route answers 503 and the widget never mounts —
+   * an outage or a runaway bill is one env var away from being contained,
+   * without a deploy.
+   */
+  AI_ASSISTANT_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  /** Server-only (SEC-12). Read by @ai-sdk/google; never reaches the browser. */
+  GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1).optional(),
+  /**
+   * The one line AD-4 exists for: swapping the model — or, with the base URL
+   * below, the whole endpoint — is a config change, not a code change.
+   */
+  AI_MODEL: z.string().min(1).default("gemini-2.5-flash"),
+  /** Vertex AI or a regional proxy. Unset means Google's public endpoint. */
+  GOOGLE_AI_BASE_URL: z.url().optional(),
+  /**
+   * SEC-13. Gemini's free tier may train on prompts, so it is a development
+   * and demo affordance only. Boot refuses it in production for the same
+   * reason it refuses PAYMENT_PROVIDER="fake": the failure is silent
+   * otherwise, and by the time anyone notices the data has already left.
+   */
+  AI_TIER: z.enum(["free", "paid"]).default("free"),
+  /**
+   * Hard cap on tool-call iterations per turn (F5 guardrails). Each step is a
+   * model call, so this bounds both a loop and the cost of one message.
+   */
+  AI_MAX_STEPS: z.coerce.number().int().min(1).max(12).default(6),
+
   PEXELS_API_KEY: z.string().min(1).optional(),
 
   APP_URL: z.url().default("http://localhost:3000"),
@@ -184,6 +216,21 @@ function loadServerEnv(): ServerEnv {
     }
     if (parsed.data.IMAGE_STORE === "blob" && !parsed.data.BLOB_READ_WRITE_TOKEN) {
       throw new Error('IMAGE_STORE="blob" is missing: BLOB_READ_WRITE_TOKEN');
+    }
+
+    // The assistant is optional, but a *enabled* assistant in production must
+    // be on a tier that does not train on what shoppers type into it (SEC-13).
+    if (parsed.data.AI_ASSISTANT_ENABLED) {
+      if (parsed.data.AI_TIER === "free") {
+        throw new Error(
+          'AI_TIER="free" cannot be used in production: the free Gemini tier may train on prompts (SEC-13). Set AI_TIER="paid" or AI_ASSISTANT_ENABLED="false".',
+        );
+      }
+      if (!parsed.data.GOOGLE_GENERATIVE_AI_API_KEY) {
+        throw new Error(
+          "AI_ASSISTANT_ENABLED is true but GOOGLE_GENERATIVE_AI_API_KEY is missing.",
+        );
+      }
     }
   }
 

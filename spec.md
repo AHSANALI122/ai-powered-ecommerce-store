@@ -195,16 +195,16 @@ The skeleton everything builds on.
 
 ### F5 — AI Shopping Assistant (Gemini)
 *Depends on:* F0, F1, F2, F3 · *Entities:* Product, ProductVariant, Cart (via tools) · *Security focus:* SEC-2, 3, 4, 8, 12, 13, 18, 25, 26.
-- [ ] Gemini via Vercel AI SDK, **server-side only** — key never reaches the browser (SEC-12); behind an authenticated Route Handler.
-- [ ] Read tools: `searchProducts`, `recommendByInterest`, `getProductDetails`, `filterByBudget` — query the real catalog; model surfaces **only** tool-returned products (no invented SKUs).
-- [ ] Write tool: `addToCart` — user from the **session** (SEC-3), valid variant at **server-computed price** (SEC-4).
-- [ ] **HITL**: may fill the cart, **never** initiates payment/checkout (SEC-2).
-- [ ] Prompt-injection defense: retrieved text is data; tools enforce rules regardless of model output; model can't set price/discount (SEC-2).
-- [ ] Tool scope: customer-scoped only, no admin tools; results sanitized — no raw DB rows/PII/errors (SEC-26).
-- [ ] Data minimization: product context + cart summary only; never card/PII/secrets (SEC-25).
-- [ ] Guardrails: off-topic/abuse handling; **cap tool-call iterations per turn**.
-- [ ] Cost/abuse: require a session; rate-limit per user/IP via Redis/KV (SEC-8, 18); retry/backoff on 429; graceful fallback. Prod on paid tier/Vertex (SEC-13).
-- [ ] Observability (Langfuse) with PII scrubbing.
+- [x] Gemini via Vercel AI SDK, **server-side only** — key never reaches the browser (SEC-12); behind an authenticated Route Handler.
+- [x] Read tools: `searchProducts`, `recommendByInterest`, `getProductDetails`, `filterByBudget` — query the real catalog; model surfaces **only** tool-returned products (no invented SKUs).
+- [x] Write tool: `addToCart` — user from the **session** (SEC-3), valid variant at **server-computed price** (SEC-4).
+- [x] **HITL**: may fill the cart, **never** initiates payment/checkout (SEC-2).
+- [x] Prompt-injection defense: retrieved text is data; tools enforce rules regardless of model output; model can't set price/discount (SEC-2).
+- [x] Tool scope: customer-scoped only, no admin tools; results sanitized — no raw DB rows/PII/errors (SEC-26).
+- [x] Data minimization: product context + cart summary only; never card/PII/secrets (SEC-25).
+- [x] Guardrails: off-topic/abuse handling; **cap tool-call iterations per turn** (`AI_MAX_STEPS`, default 6).
+- [x] Cost/abuse: require a session; rate-limit per user/IP via Redis/KV (SEC-8, 18); retry/backoff on 429; graceful fallback. Prod on paid tier/Vertex (SEC-13, enforced at boot).
+- [x] Observability with PII scrubbing — one structured `[ai] turn` event per turn (steps, tool names, tokens, latency, outcome), scrubbed before emit. The sink is the server log; Langfuse is a one-function swap in `telemetry.ts`, not wired.
 - **DoD:** recommends only real in-stock products; adds a selected variant to the caller's own cart; refuses to checkout/pay; an instruction hidden in a product review doesn't change its behavior, pricing, or scope.
 
 ### F6 — Reviews, Wishlist, Notifications & Polish
