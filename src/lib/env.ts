@@ -47,6 +47,23 @@ const serverSchema = z.object({
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
 
+  // --- Admin image upload (F4, SEC-14) -------------------------------------
+  /**
+   * Where an admin-uploaded image is written. `local` writes under the repo's
+   * public directory, which only exists on a development machine — a Vercel
+   * filesystem is read-only and per-instance — so boot refuses it in
+   * production, exactly as it refuses `PAYMENT_PROVIDER=fake`.
+   */
+  IMAGE_STORE: z.enum(["local", "blob"]).default("local"),
+  BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
+  /** Hard ceiling on an uploaded image, in bytes. Enforced twice: header, then bytes. */
+  UPLOAD_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .min(64 * 1024)
+    .max(20 * 1024 * 1024)
+    .default(5 * 1024 * 1024),
+
   PEXELS_API_KEY: z.string().min(1).optional(),
 
   APP_URL: z.url().default("http://localhost:3000"),
@@ -155,6 +172,18 @@ function loadServerEnv(): ServerEnv {
       throw new Error(
         `PAYMENT_PROVIDER="${parsed.data.PAYMENT_PROVIDER}" is missing: ${providerMissing.join(", ")}`,
       );
+    }
+
+    // The local image store writes to the deployment's own filesystem, which
+    // on Vercel is read-only and not shared between instances. An upload that
+    // "succeeds" there is a product image that 404s from the next request on.
+    if (parsed.data.IMAGE_STORE === "local") {
+      throw new Error(
+        'IMAGE_STORE="local" cannot be used in production: the filesystem is read-only and per-instance. Set IMAGE_STORE="blob".',
+      );
+    }
+    if (parsed.data.IMAGE_STORE === "blob" && !parsed.data.BLOB_READ_WRITE_TOKEN) {
+      throw new Error('IMAGE_STORE="blob" is missing: BLOB_READ_WRITE_TOKEN');
     }
   }
 

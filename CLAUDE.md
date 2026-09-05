@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A production-grade global clothing store with an agentic AI shopping assistant. `spec.md` is the authoritative design document: §1–§7 (overview, stack, ADRs, data model, security requirements SEC-1…SEC-29, NFRs) are shared context for every session; §8 lists features F0→F6 built **one at a time, in order**. Read §1–§7 plus the single feature section you are working on.
 
-**F0 (foundation), F1 (auth & accounts), F2 (catalog & SEO) and F3 (cart & checkout) are complete.** F4 (admin dashboard) is next. Build order: `F0 → F1/F2 → F3/F4 → F5 → F6`. Each feature section carries its own _Depends on_, _Entities_, _Security focus_ (SEC ids) and a **DoD** — treat the DoD as the acceptance test.
+**F0 (foundation), F1 (auth & accounts), F2 (catalog & SEO), F3 (cart & checkout) and F4 (admin dashboard) are complete.** F5 (AI shopping assistant) is next. Build order: `F0 → F1/F2 → F3/F4 → F5 → F6`. Each feature section carries its own _Depends on_, _Entities_, _Security focus_ (SEC ids) and a **DoD** — treat the DoD as the acceptance test.
 
 The implementation plan for F0–F3 lives at `~/.claude/plans/read-the-spec-md-and-lazy-quilt.md`.
 
@@ -35,6 +35,13 @@ npm run db:studio
 npm run check:public-env # SEC-12 gate: no secret may carry a NEXT_PUBLIC_ prefix
 ```
 
+The admin dashboard lives at `/admin` and needs a STAFF or ADMIN user; there is
+no self-service path to one, by design. Promote an account by hand:
+
+```bash
+npx tsx --env-file=.env -e 'const {prisma}=await import("./src/lib/db.ts"); await prisma.user.update({where:{email:"you@example.com"},data:{role:"ADMIN"}}); process.exit(0)'
+```
+
 First run: `cp .env.example .env`, fill in `DATABASE_URL`, then `npm run db:migrate && npm run db:seed`.
 
 `SKIP_ENV_VALIDATION=1` is required for `npm run build` when no real secrets are present (CI sets it). Without it, `src/lib/env.ts` fails fast at boot, which is the intended production behaviour.
@@ -43,6 +50,7 @@ Two env behaviours worth knowing before you debug them:
 
 - **`npm start` (production mode) requires `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` and `AUTH_SECRET`** or every server-rendered route 500s. That is deliberate (SEC-18): a production deploy without the shared store has silently unenforced rate limits. Use `npm run dev` for local work until Upstash is configured.
 - Empty values in `.env` (`AUTH_SECRET=""`) are treated as unset, not as an empty string, so keys copied from `.env.example` do not fail validation. `next build` is also exempted from the production-secret requirement — a build is not a boot.
+- **`IMAGE_STORE=local` is refused in production**, on the same principle as `PAYMENT_PROVIDER=fake`. The local driver writes admin uploads under `public/uploads` (gitignored); a Vercel filesystem is read-only and per-instance, so an upload there would appear to succeed and then 404. Production sets `IMAGE_STORE=blob` with a `BLOB_READ_WRITE_TOKEN`.
 
 ## Layout
 
@@ -64,13 +72,15 @@ src/server/addresses/         owner-scoped address CRUD
 src/server/orders/            checkout, capture, webhook pipeline, order number, snapshots
 src/server/payments/          PaymentProvider interface + easypaisa / stripe / fake
 src/server/notifications/     the QUEUED-row outbox writer
+src/server/admin/             F4 services: products, categories, orders, reviews, shipping, settings, audit
+src/server/uploads/           ImageStore drivers + magic-byte type detection
 src/proxy.ts                  headers, guestId + csrf cookies, Origin check, silent refresh
 src/app/                      App Router: (auth), (account), /c/[...slug], /p/[slug], /search, /cart, /checkout
 src/app/api/{auth,account}/   auth + account route handlers
 src/app/api/{cart,checkout}/  cart mutations, quote, checkout, dev sandbox
 src/app/api/webhooks/         easypaisa / stripe / fake payment callbacks
 src/app/api/cron/             expire-orders (Bearer CRON_SECRET; scheduled in vercel.json)
-src/components/               auth, cart, catalog, product, home, seo, site, ui, account
+src/components/               auth, cart, catalog, product, home, seo, site, ui, account, admin
 src/stores/{auth,cart}.ts     display-only client state (never a token, never a price)
 tests/integration/            DB-backed capture concurrency + webhook replay
 ```
@@ -84,6 +94,12 @@ tests/integration/            DB-backed capture concurrency + webhook replay
 - **Errors** — handlers return `{ error: { code, message } }` with generic messages; internal detail goes to logs only (SEC-9, SEC-26).
 - **Prisma client** — import from `@/generated/prisma/client`, use the `prisma` singleton in `src/lib/db.ts`. Prisma 7 requires a driver adapter; the Neon adapter is configured there.
 - **Catalogue caching** — reads that feed a prerendered page are wrapped in `unstable_cache` with the tags from `src/lib/cache-tags.ts`, which is what makes F4's `revalidateTag` work (SEC-11). An untagged read leaves the revalidate timer as the only lever. Filtered listing and search are deliberately uncached.
+- **Admin authorisation is re-checked against the database on every request** (SEC-7). Pages call `requireRole("STAFF","ADMIN")`, route handlers go through `requireAdminRead`/`requireAdminWrite` in `src/server/admin/guard.ts`. The proxy's `/admin` check reads a JWT claim and only saves a render — it is not the control, because a claim is up to 15 minutes stale. Deleting a product and changing the tax rate are ADMIN-only, one rung above STAFF's reversible edits.
+- **Admin listings go through `adminListSchema`** (`src/lib/validation/admin/list.ts`): capped page size, `sort` as an opaque token mapped to a hardcoded `orderBy` in the service (SEC-24). Nothing from a query string ever reaches Prisma as an identifier.
+- **The admin catalogue schemas are the only place a price enters the system.** SEC-4 says the server owns what a shopper is charged, not that prices appear from nowhere — an operator states one, as a bounded decimal _string_ that reaches Prisma as `Decimal` without passing through a JS number.
+- **Uploads are typed by their bytes, never by their name** (`src/server/uploads/image-type.ts`). SVG and GIF are rejected; the stored filename is 16 random bytes plus the sniffed extension. There is no fetch-by-URL import anywhere in F4 — that is the SSRF half of SEC-14.
+- **Admin mutations log their actor** via `adminLog` (`src/server/admin/audit.ts`), as structured `[admin]` lines. There is no `AuditLog` model and the schema is fixed through F6, so a durable trail is a deliberate later decision, not an oversight.
+- **`revalidateTag` takes two arguments in Next 16.** `revalidateTag(tag)` is deprecated and behaves like `{ expire: 0 }`, making the next shopper's request a blocking cache miss; `src/server/admin/revalidate.ts` passes `"max"` for stale-while-revalidate. `updateTag` is Server-Actions-only and unusable from these route handlers.
 - **`export const revalidate` must be a literal.** Next resolves it by static analysis, so `revalidate = CATALOG_REVALIDATE_SECONDS` (or `60 * 5`) fails the build with "Invalid segment configuration export detected" — with no indication of which file. The pages repeat `300`; `src/lib/cache-tags.test.ts` guards the drift.
 
 ## Architecture constraints that cross many files

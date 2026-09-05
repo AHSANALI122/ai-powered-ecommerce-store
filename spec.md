@@ -182,14 +182,15 @@ The skeleton everything builds on.
 
 ### F4 — Admin Dashboard
 *Depends on:* F0, F1, F2 · *Entities:* Product, ProductVariant, Category, Order, Review, ShippingZone/Rate · *Security focus:* SEC-7, 14, 16, 24.
-- [ ] RBAC-gated (STAFF/ADMIN); **every endpoint re-checks role vs DB** (SEC-7).
-- [ ] Product + variant CRUD (size/color/SKU/price/stock).
-- [ ] Image upload with type/size validation; no arbitrary-URL fetch (SEC-14).
-- [ ] Inventory view/edit + low-stock indicator.
-- [ ] Orders list/detail; guarded, logged status transitions.
-- [ ] Review moderation (approve/reject) → triggers `ratingAvg`/`ratingCount` recompute (see F6).
-- [ ] Shipping zone/rate management.
-- [ ] Admin lists paginate with capped size + whitelisted sort (SEC-24); Zod-validated (SEC-16).
+> **Built.** Image upload is an `ImageStore` interface with a `local` driver (development; refused in production by `env.ts`) and a Vercel Blob driver, chosen by `IMAGE_STORE`. Status transitions are logged as structured `[admin]` lines rather than to a table: the schema is fixed through F6 and has no `AuditLog`, so a durable trail is a deliberate later decision. Settings gained a runtime tax-rate override (ADMIN only), which is what `Setting.tax.rate` was reserved for.
+- [x] RBAC-gated (STAFF/ADMIN); **every endpoint re-checks role vs DB** (SEC-7).
+- [x] Product + variant CRUD (size/color/SKU/price/stock).
+- [x] Image upload with type/size validation; no arbitrary-URL fetch (SEC-14).
+- [x] Inventory view/edit + low-stock indicator.
+- [x] Orders list/detail; guarded, logged status transitions.
+- [x] Review moderation (approve/reject) → triggers `ratingAvg`/`ratingCount` recompute (see F6).
+- [x] Shipping zone/rate management.
+- [x] Admin lists paginate with capped size + whitelisted sort (SEC-24); Zod-validated (SEC-16).
 - **DoD:** admin creates a product with variants that is immediately purchasable at the right price; a demoted admin loses access immediately; uploads reject non-image/oversized files.
 
 ### F5 — AI Shopping Assistant (Gemini)

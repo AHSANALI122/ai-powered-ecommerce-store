@@ -62,7 +62,9 @@ function contentSecurityPolicy(isDev: boolean): string {
     "default-src 'self'",
     `script-src ${scriptSrc}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://images.pexels.com",
+    // `blob:` is the URL scheme, unrelated to Vercel Blob; the explicit host is
+    // where F4's admin uploads live when IMAGE_STORE=blob.
+    "img-src 'self' data: blob: https://images.pexels.com https://*.public.blob.vercel-storage.com",
     "font-src 'self' data:",
     `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
     "frame-ancestors 'none'",

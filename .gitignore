@@ -12,6 +12,10 @@ next-env.d.ts
 # generated prisma client
 /src/generated/
 
+# admin image uploads written by IMAGE_STORE=local (F4). Development only —
+# production uses Vercel Blob, and env.ts refuses the local store there.
+/public/uploads/
+
 # env — only .env.example is committed
 .env
 .env.*

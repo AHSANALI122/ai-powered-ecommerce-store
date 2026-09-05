@@ -38,7 +38,14 @@ const GENERIC_ERROR: ApiError = {
 async function request(path: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
-  if (init.body !== undefined && !headers.has("Content-Type")) {
+  // FormData must set its own Content-Type: the multipart boundary is generated
+  // by the browser, and naming the type here would send a body no parser can
+  // split (F4's admin image upload is the only caller that hits this).
+  if (
+    init.body !== undefined &&
+    !headers.has("Content-Type") &&
+    !(init.body instanceof FormData)
+  ) {
     headers.set("Content-Type", "application/json");
   }
   const csrf = readCsrfToken();
