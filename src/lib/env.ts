@@ -21,6 +21,32 @@ const serverSchema = z.object({
   BASE_CURRENCY: z.string().length(3).default("PKR"),
   TAX_RATE: z.coerce.number().min(0).max(1).default(0),
 
+  // --- Checkout (F3) -------------------------------------------------------
+  /** How long an unpaid PENDING order stays payable before the cron expires it. */
+  ORDER_EXPIRY_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
+  /** Which PaymentProvider a checkout is routed to. */
+  PAYMENT_PROVIDER: z.enum(["easypaisa", "stripe", "fake"]).default("fake"),
+  /** Bearer secret the order-expiry cron must present. */
+  CRON_SECRET: z.string().min(16).optional(),
+
+  EASYPAISA_STORE_ID: z.string().min(1).optional(),
+  /** 16-character AES key; also the shared secret the IPN hash is checked with. */
+  EASYPAISA_HASH_KEY: z.string().min(1).optional(),
+  EASYPAISA_USERNAME: z.string().min(1).optional(),
+  EASYPAISA_PASSWORD: z.string().min(1).optional(),
+  EASYPAISA_ACCOUNT_NUM: z.string().min(1).optional(),
+  EASYPAISA_CHECKOUT_URL: z
+    .url()
+    .default("https://easypay.easypaisa.com.pk/easypay/Index.jsf"),
+  EASYPAISA_INQUIRY_URL: z
+    .url()
+    .default(
+      "https://easypay.easypaisa.com.pk/easypay-service/rest/v4/inquire-transaction",
+    ),
+
+  STRIPE_SECRET_KEY: z.string().min(1).optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+
   PEXELS_API_KEY: z.string().min(1).optional(),
 
   APP_URL: z.url().default("http://localhost:3000"),
@@ -64,6 +90,26 @@ function isBuildPhase(): boolean {
   return process.env.NEXT_PHASE === "phase-production-build";
 }
 
+/**
+ * Credentials the configured payment provider cannot run without. Checked at
+ * boot rather than at the first checkout, so a misconfigured deploy fails
+ * before a shopper meets it.
+ */
+function missingProviderCredentials(env: ServerEnv): string[] {
+  const missing: string[] = [];
+  if (env.PAYMENT_PROVIDER === "easypaisa") {
+    if (!env.EASYPAISA_STORE_ID) missing.push("EASYPAISA_STORE_ID");
+    if (!env.EASYPAISA_HASH_KEY) missing.push("EASYPAISA_HASH_KEY");
+    if (!env.EASYPAISA_USERNAME) missing.push("EASYPAISA_USERNAME");
+    if (!env.EASYPAISA_PASSWORD) missing.push("EASYPAISA_PASSWORD");
+  }
+  if (env.PAYMENT_PROVIDER === "stripe") {
+    if (!env.STRIPE_SECRET_KEY) missing.push("STRIPE_SECRET_KEY");
+    if (!env.STRIPE_WEBHOOK_SECRET) missing.push("STRIPE_WEBHOOK_SECRET");
+  }
+  return missing;
+}
+
 function loadServerEnv(): ServerEnv {
   if (process.env.SKIP_ENV_VALIDATION === "1") {
     // Values are still shaped correctly for type-checking; nothing here is used
@@ -94,6 +140,21 @@ function loadServerEnv(): ServerEnv {
     if (!parsed.data.AUTH_SECRET) missing.push("AUTH_SECRET");
     if (missing.length > 0) {
       throw new Error(`Missing required production environment: ${missing.join(", ")}`);
+    }
+
+    // A production deploy that can take money must be able to prove a payment
+    // (AD-8). The fake provider marks orders paid on an unsigned local request,
+    // so it is a development affordance and never a production one.
+    if (parsed.data.PAYMENT_PROVIDER === "fake") {
+      throw new Error(
+        'PAYMENT_PROVIDER="fake" cannot be used in production: it accepts unverified payments.',
+      );
+    }
+    const providerMissing = missingProviderCredentials(parsed.data);
+    if (providerMissing.length > 0) {
+      throw new Error(
+        `PAYMENT_PROVIDER="${parsed.data.PAYMENT_PROVIDER}" is missing: ${providerMissing.join(", ")}`,
+      );
     }
   }
 

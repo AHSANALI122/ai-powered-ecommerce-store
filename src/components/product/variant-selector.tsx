@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { formatMoney } from "@/lib/money";
 import { runtimeRoute } from "@/lib/routes";
+import { AddToCart } from "@/components/cart/add-to-cart";
 import type { ProductVariantView } from "@/server/catalog/queries";
 
 /**
@@ -193,17 +194,16 @@ export function VariantSelector({
         ) : null}
       </p>
 
-      <button
-        type="button"
-        disabled
-        className="rounded-md bg-[var(--color-ink)] px-5 py-3 text-sm font-medium text-[var(--color-surface)] disabled:opacity-50"
-        title="The cart arrives with F3"
-      >
-        Add to cart
-      </button>
+      <AddToCart
+        variantId={selected?.id ?? null}
+        disabled={!selected || selected.stock <= 0}
+        disabledReason={
+          !selected ? "That combination is not made" : "That size and colour is sold out"
+        }
+      />
       <p className="text-xs text-[var(--color-muted)]">
-        The cart and checkout land in F3. Availability shown here is re-checked
-        server-side before any payment is taken.
+        Availability shown here is re-checked server-side before any payment is taken, and
+        stock is only claimed once a payment is verified.
       </p>
     </div>
   );

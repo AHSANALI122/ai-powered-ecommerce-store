@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/current-user";
 import { PasswordForm, ProfileForm, ResendVerificationButton } from "./account-forms";
@@ -78,9 +79,22 @@ export default async function AccountPage() {
         </ul>
       </section>
 
-      <section className="flex flex-col gap-2">
+      <section className="flex flex-col gap-3">
         <h2 className="text-lg font-medium">Orders and addresses</h2>
-        <p className="text-sm text-[var(--color-muted)]">Arriving with checkout in F3.</p>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/account/orders"
+            className="rounded-md border border-[var(--color-line)] px-4 py-2 text-sm font-medium"
+          >
+            Your orders
+          </Link>
+          <Link
+            href="/account/addresses"
+            className="rounded-md border border-[var(--color-line)] px-4 py-2 text-sm font-medium"
+          >
+            Your addresses
+          </Link>
+        </div>
       </section>
     </div>
   );

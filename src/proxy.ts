@@ -5,6 +5,7 @@ import {
   CSRF_COOKIE,
   GUEST_COOKIE,
   csrfCookie,
+  guestCookie,
 } from "@/lib/auth/cookies";
 import { verifyAccessToken } from "@/lib/auth/tokens";
 import { generateCsrfToken, isSafeMethod, isSameOriginRequest } from "@/lib/csrf";
@@ -24,13 +25,33 @@ import { generateCsrfToken, isSafeMethod, isSameOriginRequest } from "@/lib/csrf
  * payment and AI origins are known).
  */
 
-/** Only `proxy` and `config` may be exported from this file. */
-const GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * 90; // 90 days
-
 /** Signed-in only. The page still calls requireUser(); this saves a render. */
 const PROTECTED_PREFIXES = ["/account", "/checkout"] as const;
 /** Staff area. The page re-checks the role against the database (SEC-7). */
 const STAFF_PREFIXES = ["/admin"] as const;
+
+/**
+ * Hosts the browser may be POSTed to when a hosted checkout takes over.
+ * `form-action 'self'` alone would silently break the Easypaisa redirect, and
+ * a CSP violation on a payment hand-off is a very expensive thing to debug.
+ * Read from process.env rather than serverEnv() so a validation failure can
+ * never take the proxy — and with it every security header — down.
+ */
+function paymentFormOrigins(): string[] {
+  const origins = new Set<string>();
+  for (const value of [
+    process.env.EASYPAISA_CHECKOUT_URL ??
+      "https://easypay.easypaisa.com.pk/easypay/Index.jsf",
+    "https://checkout.stripe.com",
+  ]) {
+    try {
+      origins.add(new URL(value).origin);
+    } catch {
+      /* an unparseable override simply contributes nothing */
+    }
+  }
+  return [...origins];
+}
 
 function contentSecurityPolicy(isDev: boolean): string {
   const scriptSrc = isDev
@@ -45,7 +66,7 @@ function contentSecurityPolicy(isDev: boolean): string {
     "font-src 'self' data:",
     `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
     "frame-ancestors 'none'",
-    "form-action 'self'",
+    `form-action 'self' ${paymentFormOrigins().join(" ")}`,
     "base-uri 'self'",
     "object-src 'none'",
     ...(isDev ? [] : ["upgrade-insecure-requests"]),
@@ -69,23 +90,11 @@ function applySecurityHeaders(response: NextResponse, isDev: boolean): void {
   }
 }
 
-function applyIssuedCookies(
-  request: NextRequest,
-  response: NextResponse,
-  isDev: boolean,
-): void {
+function applyIssuedCookies(request: NextRequest, response: NextResponse): void {
   // Guest cart identity (F3). Issued to everyone so an anonymous cart survives
   // navigation; it is replaced by the user's cart on login.
   if (!request.cookies.get(GUEST_COOKIE)) {
-    response.cookies.set({
-      name: GUEST_COOKIE,
-      value: crypto.randomUUID(),
-      httpOnly: true,
-      secure: !isDev,
-      sameSite: "lax",
-      path: "/",
-      maxAge: GUEST_COOKIE_MAX_AGE,
-    });
+    response.cookies.set(guestCookie(crypto.randomUUID()));
   }
 
   // Double-submit CSRF value. Readable by JS on purpose: the client echoes it
@@ -113,7 +122,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   const finish = (response: NextResponse): NextResponse => {
     applySecurityHeaders(response, isDev);
-    applyIssuedCookies(request, response, isDev);
+    applyIssuedCookies(request, response);
     return response;
   };
 

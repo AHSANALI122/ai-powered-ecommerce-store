@@ -1,5 +1,10 @@
 import { serverEnv } from "@/lib/env";
-import { ACCESS_COOKIE, REFRESH_COOKIE, CSRF_COOKIE } from "@/lib/auth/cookie-names";
+import {
+  ACCESS_COOKIE,
+  REFRESH_COOKIE,
+  CSRF_COOKIE,
+  GUEST_COOKIE,
+} from "@/lib/auth/cookie-names";
 
 /**
  * Every auth cookie name and option lives here, so a change to SameSite or
@@ -22,6 +27,8 @@ export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 /** Revocation lives with the refresh token, which is a DB row we control. */
 export const REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
 export const CSRF_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
+/** Long enough that a guest cart survives a browse-now-buy-later week (F3). */
+export const GUEST_COOKIE_TTL_SECONDS = 60 * 60 * 24 * 90;
 
 export interface CookieOptions {
   name: string;
@@ -81,6 +88,23 @@ export function csrfCookie(token: string): CookieOptions {
     sameSite: "lax",
     path: "/",
     maxAge: CSRF_TOKEN_TTL_SECONDS,
+  };
+}
+
+/**
+ * Anonymous cart identity. httpOnly: unlike `csrf` there is nothing for the
+ * client to do with it, and a readable value is one XSS away from being a
+ * cart-stealing primitive.
+ */
+export function guestCookie(value: string): CookieOptions {
+  return {
+    name: GUEST_COOKIE,
+    value,
+    httpOnly: true,
+    secure: isSecure(),
+    sameSite: "lax",
+    path: "/",
+    maxAge: GUEST_COOKIE_TTL_SECONDS,
   };
 }
 

@@ -6,6 +6,8 @@ import { clientIp, rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { requireCsrf } from "@/lib/csrf";
 import { authenticate, establishSession, publicUser } from "@/server/auth/service";
 import { hashToken } from "@/lib/auth/tokens";
+import { GUEST_COOKIE } from "@/lib/auth/cookie-names";
+import { mergeGuestCart } from "@/server/cart/service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,8 +58,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     ip,
   });
 
-  // F3 hooks the guest-cart merge in here: the guestId cookie is still on the
-  // request at this point, and the user id has just been established.
+  // --- Guest cart merge (F3, SEC-23) --------------------------------------
+  // Done here because this is the one moment both identities are in hand: the
+  // guestId cookie is still on the request, and the user id has just been
+  // established. Quantities are summed per variant and the guest cart is
+  // deleted, so the anonymous identity is left owning nothing.
+  const guestId = request.cookies.get(GUEST_COOKIE)?.value;
+  if (guestId) {
+    await mergeGuestCart(user.id, guestId);
+    // Retire the identity whose cart was just absorbed; the proxy issues a
+    // fresh one on the next request if this browser ever signs out.
+    response.cookies.delete(GUEST_COOKIE);
+  }
 
   return response;
 }

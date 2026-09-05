@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A production-grade global clothing store with an agentic AI shopping assistant. `spec.md` is the authoritative design document: §1–§7 (overview, stack, ADRs, data model, security requirements SEC-1…SEC-29, NFRs) are shared context for every session; §8 lists features F0→F6 built **one at a time, in order**. Read §1–§7 plus the single feature section you are working on.
 
-**F0 (foundation), F1 (auth & accounts) and F2 (catalog & SEO) are complete.** F3 (cart & checkout) is next. Build order: `F0 → F1/F2 → F3/F4 → F5 → F6`. Each feature section carries its own _Depends on_, _Entities_, _Security focus_ (SEC ids) and a **DoD** — treat the DoD as the acceptance test.
+**F0 (foundation), F1 (auth & accounts), F2 (catalog & SEO) and F3 (cart & checkout) are complete.** F4 (admin dashboard) is next. Build order: `F0 → F1/F2 → F3/F4 → F5 → F6`. Each feature section carries its own _Depends on_, _Entities_, _Security focus_ (SEC ids) and a **DoD** — treat the DoD as the acceptance test.
 
 The implementation plan for F0–F3 lives at `~/.claude/plans/read-the-spec-md-and-lazy-quilt.md`.
 
@@ -23,8 +23,9 @@ npm run dev              # next dev
 npm run build            # production build (CI gate)
 npm run typecheck        # tsc --noEmit
 npm run lint             # eslint
-npm test                 # vitest run
+npm test                 # vitest run (unit; DB-backed suites skip themselves)
 npm run test:watch
+INTEGRATION_DATABASE_URL=postgresql://... npm run test:integration   # capture concurrency vs real Postgres
 npx vitest run src/lib/money.test.ts -t "rounds half away from zero"   # single test
 
 npm run db:migrate       # prisma migrate dev   (local schema change)
@@ -54,15 +55,24 @@ src/generated/prisma/         generated client — gitignored, regenerate with `
 src/lib/{env,db,redis,money,rate-limit,http}.ts
 src/lib/auth/                 tokens, password, session rotation, cookies, guards
 src/lib/{csrf,safe-redirect,routes,cache-tags}.ts
-src/lib/validation/           Zod schemas (auth bodies, catalog query)
+src/lib/validation/           Zod schemas (auth bodies, catalog query, cart, address, checkout)
 src/server/auth/service.ts    register / login / verify / reset flows
 src/server/catalog/queries.ts every catalogue read, incl. the sort whitelist
+src/server/cart/              owner resolution (user | guestId) + cart service, guest merge
+src/server/pricing/           buildQuote + computeTotals (pure), tax-rate setting
+src/server/addresses/         owner-scoped address CRUD
+src/server/orders/            checkout, capture, webhook pipeline, order number, snapshots
+src/server/payments/          PaymentProvider interface + easypaisa / stripe / fake
 src/server/notifications/     the QUEUED-row outbox writer
 src/proxy.ts                  headers, guestId + csrf cookies, Origin check, silent refresh
-src/app/                      App Router: (auth), (account), /c/[...slug], /p/[slug], /search
+src/app/                      App Router: (auth), (account), /c/[...slug], /p/[slug], /search, /cart, /checkout
 src/app/api/{auth,account}/   auth + account route handlers
-src/components/               auth, catalog, product, home, seo, site, ui
-src/stores/auth.ts            display-only client session state (never a token)
+src/app/api/{cart,checkout}/  cart mutations, quote, checkout, dev sandbox
+src/app/api/webhooks/         easypaisa / stripe / fake payment callbacks
+src/app/api/cron/             expire-orders (Bearer CRON_SECRET; scheduled in vercel.json)
+src/components/               auth, cart, catalog, product, home, seo, site, ui, account
+src/stores/{auth,cart}.ts     display-only client state (never a token, never a price)
+tests/integration/            DB-backed capture concurrency + webhook replay
 ```
 
 ## Conventions
@@ -85,7 +95,11 @@ From the ADRs (§4) — the ones a locally-sensible change is most likely to bre
 - **The order lifecycle is fixed** (SEC-19): create `PENDING` → validate stock _without_ decrementing → payment → decrement atomically _inside_ the verified-PAID transaction while re-checking availability → auto-refund + notify if stock vanished. Decrementing earlier strands inventory; decrementing later oversells. The conditional `updateMany({ where: { stock: { gte: qty } } })` with an affected-count assertion is what makes oversell impossible.
 - **Server recomputes all totals from the DB at checkout** (SEC-4, SEC-11); client amounts are ignored.
 - **Orders snapshot address and items** — later catalog or address edits must not mutate historical orders.
-- **`Notification` is an outbox**, not a send call: rows are QUEUED and a worker flips them SENT/FAILED with retries.
+- **`Notification` is an outbox**, not a send call: rows are QUEUED and a worker flips them SENT/FAILED with retries. Capture writes its confirmation row **inside** the capture transaction, so a crash cannot commit an order and lose its email.
+- **A cart line stores no price.** Unit prices are resolved from the variant on every read and again at checkout; a price frozen onto a cart row is a price a shopper can sit on until it is wrong (SEC-11).
+- **`Idempotency-Key` is a header, not a body field** — it identifies the checkout _attempt_. The client regenerates it when the address or shipping rate changes, because that is a different order; reusing it would replay the previous one.
+- **Webhooks are exempt from CSRF in the proxy** (`/api/webhooks/`) and authenticate by signature or keyed hash instead. Read the body with `request.text()`, once: Stripe signs the exact bytes.
+- **`env.ts` refuses to boot** with `PAYMENT_PROVIDER=fake` in production, or without the selected provider's credentials.
 - **`ratingAvg`/`ratingCount` are cached on `Product`** and must be recomputed transactionally on review moderation.
 
 ## AI assistant boundaries (F5)
@@ -94,13 +108,14 @@ Customer-scoped tool user, not an operator. Read tools query the real catalog an
 
 ## Decisions locked
 
-|               |                                                                                          |
-| ------------- | ---------------------------------------------------------------------------------------- |
-| Base currency | **PKR**, single currency, no FX. `Order.currency`/`fxRate` exist for later.              |
-| Tax           | Single flat rate from `TAX_RATE`; a `Setting` row keyed `tax.rate` overrides at runtime. |
-| Payments      | **Easypaisa first**, Stripe second, both behind one `PaymentProvider` interface.         |
+|               |                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| Base currency | **PKR**, single currency, no FX. `Order.currency`/`fxRate` exist for later.                |
+| Tax           | Single flat rate from `TAX_RATE`; a `Setting` row keyed `tax.rate` overrides at runtime.   |
+| Payments      | **Easypaisa first**, Stripe second, both behind one `PaymentProvider` interface.           |
+| Dev payments  | `PAYMENT_PROVIDER=fake` — HMAC-signed sandbox provider; `env.ts` refuses it in production. |
 
-Open: Easypaisa sandbox credentials; Stripe is unavailable to Pakistan-incorporated merchants and PKR is not a presentment currency on most Stripe accounts, so the Stripe leg needs a decision before it is wired.
+Open: Easypaisa sandbox credentials — the provider is written against the published Hosted Checkout scheme (AES-128-ECB request hash, v4 inquiry endpoint) but has never been run against a sandbox; every field name Easypaisa controls sits in the two constant blocks at the top of `src/server/payments/easypaisa.ts`. Easypaisa also has no merchant refund API, so `refund()` reports `automatic: false` and the capture path queues an operator notification instead. Stripe is written and gated but unavailable to Pakistan-incorporated merchants (PKR is not a presentment currency on most accounts), so it needs a decision before it is selected.
 
 ## Seed data is a launch gate
 

@@ -4,6 +4,7 @@ import { publicEnv } from "@/lib/env";
 import { SessionLoader } from "@/components/auth/session-loader";
 import { AccountNav } from "@/components/site/account-nav";
 import { CategoryNav, SearchForm } from "@/components/site/category-nav";
+import { CartLink } from "@/components/cart/cart-link";
 import { WebSiteJsonLd } from "@/components/seo/json-ld";
 import "./globals.css";
 
@@ -50,6 +51,7 @@ export default function RootLayout({
               </Link>
               <div className="flex items-center gap-6">
                 <SearchForm />
+                <CartLink />
                 <nav aria-label="Account">
                   <AccountNav />
                 </nav>

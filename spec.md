@@ -157,27 +157,27 @@ The skeleton everything builds on.
 
 ### F3 — Cart & Checkout (Stripe + Easypaisa)
 *Depends on:* F0, F1, F2 · *Entities:* Cart, CartItem, Order, OrderItem, Address, ShippingZone, ShippingRate, ProductVariant · *Security focus:* SEC-4, 5, 6, 18, 19, 20, 23, 29.
-> **Blocked until Open Decisions (§9) resolved:** Easypaisa creds, integration mode, base currency + FX, tax rule.
+> **Built.** Currency (PKR, no FX), tax rule (flat, `TAX_RATE` with a `tax.rate` `Setting` override) and integration mode (Hosted Checkout redirect) are decided in CLAUDE.md. Easypaisa credentials are still outstanding: the provider is written against the published scheme but unexercised, and `PAYMENT_PROVIDER=fake` — an HMAC-signed local provider driving the same verify → inquire → capture path — carries development until they arrive.
 
 *Cart & address*
-- [ ] Server cart keyed to `userId` (member) or `guestId` cookie (guest).
-- [ ] **Guest → user merge on login**: dedupe by variant, delete guest cart (SEC-23).
-- [ ] Cart items reference a variant; inactive/unavailable variants flagged and blocked at checkout.
-- [ ] Address CRUD + default; owner-scoped (SEC-23).
+- [x] Server cart keyed to `userId` (member) or `guestId` cookie (guest).
+- [x] **Guest → user merge on login**: dedupe by variant, delete guest cart (SEC-23).
+- [x] Cart items reference a variant; inactive/unavailable variants flagged and blocked at checkout.
+- [x] Address CRUD + default; owner-scoped (SEC-23).
 
 *Shipping & totals*
-- [ ] Resolve `ShippingZone` by destination country (`["*"]` fallback); pick `ShippingRate`; apply `freeOver`.
-- [ ] Tax per configured rule (MVP: single configurable rate).
-- [ ] **Checkout recomputes all prices/shipping/tax/totals server-side from DB** — client amounts ignored (SEC-4); convert via agreed FX source, store rate on order.
+- [x] Resolve `ShippingZone` by destination country (`["*"]` fallback); pick `ShippingRate`; apply `freeOver`.
+- [x] Tax per configured rule (MVP: single configurable rate).
+- [x] **Checkout recomputes all prices/shipping/tax/totals server-side from DB** — client amounts ignored (SEC-4); convert via agreed FX source, store rate on order.
 
 *Order & payment lifecycle (SEC-19 — follow exactly)*
-- [ ] Create `Order = PENDING` with **address + item snapshots**; `orderNumber` from a DB sequence / random suffix (SEC-29).
-- [ ] Validate stock now, **do not decrement**.
-- [ ] Initiate payment via `PaymentProvider`: Stripe (PaymentIntent/Checkout Session) · Easypaisa (**Hosted Checkout redirect**, methods MA/OTC, `storeId`/`hashKey`).
-- [ ] **Idempotency key** per checkout (Redis/KV) — no duplicate orders/charges (SEC-20, 18).
-- [ ] Confirm PAID only via server-verified signal (SEC-6/AD-8): Stripe signed webhook; Easypaisa **IPN hash verified with `hashKey`** *and* **transaction-inquiry**. Never the browser redirect.
-- [ ] On verified PAID, in **one transaction**: re-check + **atomically decrement** stock (`stock >= qty`); set PAID/PROCESSING. If stock gone → **auto-refund + notify** (SEC-19).
-- [ ] Expire abandoned `PENDING` orders; queue confirmation email (sent in F6).
+- [x] Create `Order = PENDING` with **address + item snapshots**; `orderNumber` from a DB sequence / random suffix (SEC-29).
+- [x] Validate stock now, **do not decrement**.
+- [x] Initiate payment via `PaymentProvider`: Stripe (PaymentIntent/Checkout Session) · Easypaisa (**Hosted Checkout redirect**, methods MA/OTC, `storeId`/`hashKey`).
+- [x] **Idempotency key** per checkout (Redis/KV) — no duplicate orders/charges (SEC-20, 18).
+- [x] Confirm PAID only via server-verified signal (SEC-6/AD-8): Stripe signed webhook; Easypaisa **IPN hash verified with `hashKey`** *and* **transaction-inquiry**. Never the browser redirect.
+- [x] On verified PAID, in **one transaction**: re-check + **atomically decrement** stock (`stock >= qty`); set PAID/PROCESSING. If stock gone → **auto-refund + notify** (SEC-19).
+- [x] Expire abandoned `PENDING` orders; queue confirmation email (sent in F6).
 - **DoD:** two concurrent checkouts for the last unit → exactly one PAID + one clean rejection; spoofed price can't change the charge; forged success redirect can't mark PAID; double-click creates one order.
 
 ### F4 — Admin Dashboard
