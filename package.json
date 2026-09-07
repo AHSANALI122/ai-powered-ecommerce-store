@@ -19,6 +19,8 @@
     "test:integration": "vitest run tests/integration",
     "check:public-env": "node scripts/check-public-env.mjs",
     "purge:seed": "tsx --env-file=.env scripts/purge-seed-data.ts",
+    "mail:send": "tsx --env-file=.env scripts/drain-outbox.ts",
+    "mail:watch": "tsx --env-file=.env scripts/drain-outbox.ts --watch",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",

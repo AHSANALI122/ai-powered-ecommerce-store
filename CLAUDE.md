@@ -49,14 +49,27 @@ Transactional email needs `EMAIL_DRIVER="resend"` plus `RESEND_API_KEY` and an
 outbox lifecycle works with no provider; `env.ts` refuses it in production.
 
 The outbox is drained by `/api/cron/send-notifications` (Bearer `CRON_SECRET`,
-every two minutes in `vercel.json`). Nothing sends without that job running —
-in development, hit it by hand:
+every two minutes in `vercel.json`). **Nothing sends without that job running**,
+and nothing runs it on a development machine — a queued verification email just
+stays QUEUED, which looks like broken email when the row was written correctly.
+Locally, drain it with the script instead:
+
+```bash
+npm run mail:send                # drain once
+npm run mail:watch               # poll every 5s, run alongside `next dev`
+npm run mail:send -- --replay    # requeue FAILED rows first, then drain
+```
+
+`scripts/drain-outbox.ts` calls `processOutbox` directly, so it needs no running
+server and no `CRON_SECRET`. Racing the real cron is safe for the same reason two
+overlapping cron invocations are — the worker claims each row with a conditional
+update, so they divide the batch. The HTTP route is still the production path:
 
 ```bash
 curl -H "Authorization: Bearer $(grep ^CRON_SECRET .env | cut -d= -f2- | tr -d '\"')"   http://localhost:3000/api/cron/send-notifications
 ```
 
-Add `?replay=1` to requeue rows that exhausted their retries. That is the manual
+Add `?replay=1` (or `--replay`) to requeue rows that exhausted their retries. That is the manual
 half of the outbox promise and is deliberately not automatic: a row reaches
 FAILED because five attempts did not work, and retrying it forever on a schedule
 hides the problem instead of surfacing it.
