@@ -17,6 +17,29 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
+ * Is this the provider saying "not now" rather than "no"?
+ *
+ * Gemini's free tier caps `generateContent` per model per day — 20 for
+ * gemini-2.5-flash — and one shopper message can spend several of them,
+ * because the agent loop makes a model call per step. So the budget runs out
+ * during ordinary use, and it is a capacity limit rather than a fault.
+ * "Something went wrong" is the wrong thing to say about it: the shopper
+ * retries at once, spends more of what is left, and gets the same message.
+ *
+ * Matched on the status code where the SDK exposes one and on the provider's
+ * own vocabulary otherwise — the SDK wraps a retried failure in an error that
+ * carries the text but not the status, so neither check is redundant. Nothing
+ * matched here reaches the shopper (SEC-26); it only chooses which of our own
+ * two sentences to send.
+ */
+function isQuotaExhausted(error: unknown): boolean {
+  const status = (error as { statusCode?: unknown } | null)?.statusCode;
+  if (status === 429) return true;
+  const message = error instanceof Error ? error.message : "";
+  return /RESOURCE_EXHAUSTED|quota|rate.?limit/i.test(message);
+}
+
+/**
  * POST /api/assistant/chat — the AI shopping assistant (F5).
  *
  * The order of the checks below is the whole cost-and-abuse story, and it is
@@ -127,6 +150,7 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
        * having.
        */
       onError(error) {
+        const throttled = isQuotaExhausted(error);
         console.error("[ai] stream error", error);
         recordAssistantTurn({
           actor,
@@ -136,10 +160,12 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
           inputTokens,
           outputTokens,
           durationMs: Date.now() - startedAt,
-          outcome: "error",
+          outcome: throttled ? "provider-throttled" : "error",
           reason: error instanceof Error ? error.message : "unknown",
         });
-        return "Sorry — something went wrong on my side. Try asking again.";
+        return throttled
+          ? "I am handling a lot of requests right now. Give me a moment and ask again."
+          : "Sorry — something went wrong on my side. Try asking again.";
       },
     });
   } catch (error) {

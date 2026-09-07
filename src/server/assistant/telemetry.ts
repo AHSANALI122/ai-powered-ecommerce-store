@@ -30,8 +30,14 @@ export interface AssistantTurnEvent {
   inputTokens: number | undefined;
   outputTokens: number | undefined;
   durationMs: number;
-  outcome: "ok" | "error" | "rate-limited" | "aborted";
-  /** Present only when outcome is "error"; already scrubbed. */
+  /**
+   * `rate-limited` is our own Redis budget refusing the turn before it costs
+   * anything; `provider-throttled` is the model provider refusing it after we
+   * allowed it. Separate values because they call for opposite responses —
+   * one is a shopper sending too much, the other is our own capacity.
+   */
+  outcome: "ok" | "error" | "rate-limited" | "provider-throttled" | "aborted";
+  /** Present when outcome is "error" or "provider-throttled"; already scrubbed. */
   reason?: string;
 }
 

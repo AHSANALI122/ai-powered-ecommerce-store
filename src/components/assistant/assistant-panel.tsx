@@ -39,6 +39,45 @@ function textOf(message: UIMessage): string {
 }
 
 /**
+ * The sentence to show for a failed turn.
+ *
+ * The route already decides what a shopper should be told — a provider that is
+ * momentarily out of budget reads differently from a bug, and its own rate
+ * limit differently again — and this component used to throw all of that away
+ * for one fixed string. So: prefer the server's sentence, fall back only when
+ * there isn't a usable one.
+ *
+ * Two shapes arrive here. A failure *inside* the stream surfaces as the plain
+ * text the route's `onError` returned. A request rejected *before* the stream
+ * opened (503 kill switch, 429 budget, 401) surfaces as the raw `jsonError`
+ * body, so its message is dug out rather than shown as JSON.
+ *
+ * Anything else — a proxy's HTML error page, a bare network failure, an empty
+ * string — falls through to the generic sentence. The point is to be more
+ * specific when we can be, never to render whatever arrives.
+ */
+const FALLBACK_ERROR = "Something went wrong. Try asking again.";
+
+function errorMessage(error: Error | undefined): string {
+  const raw = error?.message?.trim();
+  if (!raw) return FALLBACK_ERROR;
+
+  if (raw.startsWith("{")) {
+    try {
+      const body = JSON.parse(raw) as { error?: { message?: unknown } };
+      const message = body.error?.message;
+      return typeof message === "string" && message.trim() ? message : FALLBACK_ERROR;
+    } catch {
+      return FALLBACK_ERROR;
+    }
+  }
+
+  // A sentence, not a stack trace or a markup blob.
+  const plausible = raw.length <= 200 && !/[<\n]/.test(raw);
+  return plausible ? raw : FALLBACK_ERROR;
+}
+
+/**
  * What the shopper is told while a tool runs.
  *
  * Named per tool rather than a generic spinner: "Looking through the
@@ -206,7 +245,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
 
         {error ? (
           <p role="alert" className="mt-3 text-xs text-red-600">
-            Something went wrong. Try asking again.
+            {errorMessage(error)}
           </p>
         ) : null}
       </div>

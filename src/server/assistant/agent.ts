@@ -71,7 +71,16 @@ export async function buildAssistantAgent(userId: string): Promise<ToolLoopAgent
      * readily. Stated rather than left to the default because it is a spec
      * requirement, and because the ceiling matters: a third attempt on a rate
      * limit is usually a fourth rate limit, and the shopper is waiting.
+     *
+     * One, not two, and the free tier is the reason. Its quota is per model
+     * per *day*, so a 429 from it is not a window that reopens in seconds —
+     * and the `RetryInfo` it returns (2s) says otherwise, in the body rather
+     * than in a `retry-after` header the SDK could weigh. Retrying therefore
+     * spends another request from a budget already at zero and moves the
+     * failure onto the next shopper. One retry still absorbs the genuine
+     * transient blip this setting is for; the second only takes. The route
+     * turns what is left into "give me a moment" rather than an error.
      */
-    maxRetries: 2,
+    maxRetries: 1,
   });
 }
