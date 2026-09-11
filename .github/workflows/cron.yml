@@ -1,0 +1,48 @@
+# Outbox and order-expiry scheduler.
+#
+# Vercel's Hobby plan caps cron jobs at one run per day, and a daily outbox
+# drain means a verification email can sit QUEUED for 24 hours — which looks
+# exactly like broken email even though the row was written correctly. The
+# schedules in vercel.json stay as a daily safety net; this workflow is what
+# actually keeps the cadence useful.
+#
+# GitHub's scheduled runners fire roughly every 5 minutes at best and are
+# delayed under load, so treat this as "a few minutes", not as a guarantee.
+# Racing the Vercel cron is safe: the worker claims each row with a conditional
+# update, so overlapping runs divide the batch rather than sending twice.
+#
+# Requires one repository secret, CRON_SECRET, matching the value in Vercel.
+name: Scheduled jobs
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+# A slow run must not stack up behind the next tick.
+concurrency:
+  group: scheduled-jobs
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Drain the notification outbox
+        run: |
+          code=$(curl -sS -o /tmp/out.txt -w '%{http_code}' \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ vars.APP_URL }}/api/cron/send-notifications")
+          echo "HTTP $code"; cat /tmp/out.txt
+          # A non-2xx here means the job did not run at all; fail loudly rather
+          # than letting a broken schedule look like an empty queue.
+          [ "$code" -ge 200 ] && [ "$code" -lt 300 ]
+
+      - name: Expire abandoned orders
+        run: |
+          code=$(curl -sS -o /tmp/out.txt -w '%{http_code}' \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ vars.APP_URL }}/api/cron/expire-orders")
+          echo "HTTP $code"; cat /tmp/out.txt
+          [ "$code" -ge 200 ] && [ "$code" -lt 300 ]

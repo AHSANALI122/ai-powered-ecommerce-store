@@ -35,3 +35,6 @@ playwright-report/
 
 # logs from a backgrounded dev server
 *.log
+
+.vercel
+.env*

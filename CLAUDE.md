@@ -68,8 +68,13 @@ arrived" is always either the provider rejecting it or nothing draining the
 queue, and those have unrelated fixes. This isolates the first half and prints
 the provider's verbatim refusal instead of the truncated `lastError`.
 
-The outbox is drained by `/api/cron/send-notifications` (Bearer `CRON_SECRET`,
-every two minutes in `vercel.json`). **Nothing sends without that job running**,
+The outbox is drained by `/api/cron/send-notifications` (Bearer `CRON_SECRET`).
+**The Hobby plan caps Vercel crons at one run per day**, so `vercel.json` holds
+daily schedules as a safety net and `.github/workflows/cron.yml` does the real
+work every ~5 minutes against `vars.APP_URL` with a `CRON_SECRET` repo secret.
+Racing them is safe for the same reason two overlapping cron runs are — the
+worker claims each row with a conditional update. On a Pro plan, put the
+`*/2` and `*/10` schedules back in `vercel.json` and delete the workflow. **Nothing sends without that job running**,
 and nothing runs it on a development machine — a queued verification email just
 stays QUEUED, which looks like broken email when the row was written correctly.
 Locally, drain it with the script instead:
