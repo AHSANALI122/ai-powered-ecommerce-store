@@ -276,6 +276,64 @@ export async function removeItem(
   return { ok: result.count > 0, cart: await getCartView(owner) };
 }
 
+/**
+ * The same two mutations, addressed by **variant** rather than by cart-item id.
+ *
+ * The HTTP cart routes work from an item id because the page they serve has
+ * one in its markup. The assistant does not: a cart-item id is a row handle it
+ * has never been given, and handing it one would mean inventing a second
+ * identifier for the model to confuse with a variantId. A variant is the thing
+ * the model already names everywhere else, and one cart holds at most one line
+ * per variant (the `cartId_variantId` unique), so the address is unambiguous.
+ *
+ * Ownership is unchanged and is still in the `where` (SEC-23): a variantId
+ * that is not in *this* owner's cart matches zero rows. Nothing is fetched and
+ * then checked afterwards.
+ */
+export async function removeItemByVariant(
+  owner: CartOwner,
+  variantId: string,
+): Promise<{ ok: boolean; removed: CartLine | null; cart: CartView }> {
+  const before = await getCartView(owner);
+  const removed = before.lines.find((line) => line.variantId === variantId) ?? null;
+  if (!removed) return { ok: false, removed: null, cart: before };
+
+  // Deleted by owner-scoped filter regardless of what the read above returned,
+  // so the read is a courtesy for the caller's message, not the authorisation.
+  await prisma.cartItem.deleteMany({
+    where: { variantId, cart: cartWhere(owner) },
+  });
+
+  return { ok: true, removed, cart: await getCartView(owner) };
+}
+
+/**
+ * Sets a line to an absolute quantity, clamped to stock and to the line cap.
+ *
+ * Absolute rather than a delta: "make it two" survives a retry, "add one" does
+ * not, and a tool call is exactly the kind of thing that gets retried.
+ */
+export async function setItemQuantityByVariant(
+  owner: CartOwner,
+  variantId: string,
+  quantity: number,
+): Promise<{ ok: boolean; cart: CartView }> {
+  const item = await prisma.cartItem.findFirst({
+    where: { variantId, cart: cartWhere(owner) },
+    select: { id: true, variant: { select: { stock: true } } },
+  });
+
+  if (!item) return { ok: false, cart: await getCartView(owner) };
+
+  const clamped = Math.max(
+    1,
+    Math.min(quantity, Math.max(item.variant.stock, 1), MAX_LINE_QUANTITY),
+  );
+  await prisma.cartItem.update({ where: { id: item.id }, data: { quantity: clamped } });
+
+  return { ok: true, cart: await getCartView(owner) };
+}
+
 /** Emptied on a successful capture, so a paid cart cannot be checked out twice. */
 export async function clearCart(cartId: string): Promise<void> {
   await prisma.cartItem.deleteMany({ where: { cartId } });

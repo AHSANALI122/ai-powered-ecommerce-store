@@ -126,3 +126,36 @@ export const addToCartInput = z.object({
   ),
   quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY).default(1),
 });
+
+/**
+ * The cart-management inputs.
+ *
+ * They address a line by **variantId** — the same handle `addToCart` takes and
+ * the only item identifier the model is ever given. There is deliberately no
+ * cart id and no cart-item id in any of these: the cart being read or changed
+ * is always the one belonging to the session the route authenticated, resolved
+ * in the closure (SEC-3). And there is deliberately no "empty the cart" input
+ * anywhere — a line at a time is a request a shopper makes; emptying a cart is
+ * the shape of an instruction smuggled in through a product review.
+ */
+export const viewCartInput = z.object({});
+
+export const removeFromCartInput = z.object({
+  variantId: idSchema.describe(
+    "The variantId of the cart line to remove, exactly as viewCart returned it.",
+  ),
+});
+
+export const updateCartQuantityInput = z.object({
+  variantId: idSchema.describe(
+    "The variantId of the cart line to change, exactly as viewCart returned it.",
+  ),
+  quantity: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_LINE_QUANTITY)
+    .describe(
+      "The new absolute quantity for that line, not a difference. Zero is not a quantity — use removeFromCart to take the line out.",
+    ),
+});

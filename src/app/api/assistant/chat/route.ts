@@ -8,6 +8,7 @@ import { clientIp, rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { serverEnv } from "@/lib/env";
 import { assistantChatSchema } from "@/lib/validation/assistant";
 import { buildAssistantAgent } from "@/server/assistant/agent";
+import { toUiMessages } from "@/server/assistant/messages";
 import { assistantAvailable } from "@/server/assistant/config";
 import { actorTag, recordAssistantTurn } from "@/server/assistant/telemetry";
 
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
 
     return await createAgentUIStreamResponse({
       agent,
-      uiMessages: parsed.data.messages,
+      uiMessages: toUiMessages(parsed.data),
       // The browser can hang up mid-stream; without this the agent loop keeps
       // calling a paid model for an answer nobody will read.
       abortSignal: request.signal,

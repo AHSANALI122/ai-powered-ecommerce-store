@@ -31,8 +31,10 @@ const AssistantPanel = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="h-40 w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-muted)] shadow-xl">
-        Opening…
+      <div className="animate-scale-in flex h-40 w-[min(24rem,calc(100vw-2rem))] origin-bottom-right flex-col gap-3 rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-elevated)] p-4 shadow-[var(--shadow-panel)]">
+        <div className="shimmer h-3 w-32 rounded-full" />
+        <div className="shimmer h-3 w-48 rounded-full" />
+        <div className="shimmer h-3 w-40 rounded-full" />
       </div>
     ),
   },
@@ -62,16 +64,19 @@ export function AssistantLauncher({ available }: { available: boolean }) {
         status === "authenticated" ? (
           <AssistantPanel onClose={() => setOpen(false)} />
         ) : (
-          <div className="w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] p-4 text-sm shadow-xl">
-            <p className="font-medium">Sign in to use the assistant</p>
-            <p className="mt-1 text-[var(--color-muted)]">
+          <div className="animate-scale-in w-[min(20rem,calc(100vw-2rem))] origin-bottom-right rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-elevated)] p-5 text-sm shadow-[var(--shadow-panel)]">
+            <p className="font-display text-base font-semibold">
+              Sign in to use the assistant
+            </p>
+            <p className="mt-1.5 leading-relaxed text-[var(--color-muted)]">
               It adds items to your own cart, so it needs to know whose cart that is.
             </p>
             <Link
               href="/login?next=%2F"
-              className="mt-3 inline-block rounded-md bg-[var(--color-ink)] px-3 py-2 text-xs font-medium text-[var(--color-surface)]"
+              className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--color-ink)] px-4 py-2 text-xs font-medium text-[var(--color-surface)] transition-[box-shadow,transform] duration-200 ease-[var(--ease-interaction)] hover:shadow-[var(--shadow-lift)] active:translate-y-px"
             >
               Sign in
+              <span aria-hidden="true">→</span>
             </Link>
           </div>
         )
@@ -82,8 +87,16 @@ export function AssistantLauncher({ available }: { available: boolean }) {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-label={open ? "Close the shopping assistant" : "Open the shopping assistant"}
-        className="rounded-full bg-[var(--color-ink)] px-5 py-3 text-sm font-medium text-[var(--color-surface)] shadow-lg transition-transform hover:scale-105"
+        className="group flex items-center gap-2 rounded-full bg-[var(--color-ink)] px-5 py-3 text-sm font-medium text-[var(--color-surface)] shadow-[var(--shadow-panel)] transition-[transform,box-shadow] duration-300 ease-[var(--ease-entrance)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] active:translate-y-0"
       >
+        <span
+          aria-hidden="true"
+          className={`text-[var(--color-accent)] transition-transform duration-500 ease-[var(--ease-entrance)] ${
+            open ? "rotate-90" : "group-hover:rotate-12"
+          }`}
+        >
+          {open ? "✕" : "✦"}
+        </span>
         {open ? "Close" : "Ask for help"}
       </button>
     </div>

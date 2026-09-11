@@ -1,4 +1,4 @@
-import { tool, type ToolSet } from "ai";
+import { tool, type JSONValue, type ToolSet } from "ai";
 import { prisma } from "@/lib/db";
 import { serverEnv } from "@/lib/env";
 import { toStorage } from "@/lib/money";
@@ -16,10 +16,20 @@ import {
   filterByBudgetInput,
   getProductDetailsInput,
   recommendByInterestInput,
+  removeFromCartInput,
   searchProductsInput,
+  updateCartQuantityInput,
+  viewCartInput,
   TOOL_RESULT_LIMIT_MAX,
 } from "@/lib/validation/assistant";
-import { addItem, getCartView } from "@/server/cart/service";
+import {
+  addItem,
+  getCartView,
+  removeItemByVariant,
+  setItemQuantityByVariant,
+  type CartLine,
+  type CartView,
+} from "@/server/cart/service";
 import { asUntrustedData, sanitizeText } from "@/server/assistant/sanitize";
 
 /**
@@ -41,8 +51,18 @@ import { asUntrustedData, sanitizeText } from "@/server/assistant/sanitize";
  *     with a named, sanitised set of fields. A Prisma row would leak `isActive`,
  *     `source`, internal ids and, on a join, other people's data (SEC-26).
  *  4. **Customer scope only.** These tools read the *public* catalogue — the
- *     same `isActive` filters the storefront uses — and write to exactly one
- *     cart. There is no admin capability here to escalate into (SEC-26).
+ *     same `isActive` filters the storefront uses — and read and write exactly
+ *     one cart, the caller's. There is no admin capability here to escalate
+ *     into (SEC-26).
+ *
+ * The three write tools are all *cart* writes — add a line, change a line's
+ * quantity, take a line out. Every one of them is something the shopper can
+ * undo in one click on /cart, which is the line this tool set draws: the
+ * assistant may arrange a basket, and it may not spend anything. There is no
+ * checkout, order, payment, refund, discount or stock tool, and there is no
+ * "empty the cart" tool either — the model removes one named line at a time,
+ * so the worst a successful injection achieves is one line a shopper can put
+ * straight back (SEC-2).
  *
  * Failures return `{ ok: false, message }`. Throwing would put a stack trace
  * into the model's context and, from there, potentially into a chat bubble.
@@ -72,6 +92,32 @@ interface ToolProduct {
   rating: { average: string; count: number } | null;
   /** Relative; the client turns it into a link. Never an absolute URL. */
   url: string;
+  /**
+   * The product's first catalogue image, so a suggestion can be shown as a
+   * picture rather than described. It goes to the *client*, which renders it —
+   * the model is told nothing useful by a URL and must not be handed one it
+   * could echo into an answer, so `image` is stripped before the result
+   * reaches the model (see `forModel` below).
+   */
+  image: string | null;
+}
+
+/**
+ * Image URLs the panel is allowed to render.
+ *
+ * The value comes from a product row, not from the model, so this is not the
+ * injection boundary — it is the same defensive shape check the link policy
+ * makes on the renderer's side. `https:` or a same-origin path, nothing else:
+ * a `javascript:` or `data:` URL that somehow reached an image column is not
+ * something a chat bubble should be the first place to discover.
+ */
+function toImageUrl(image: string | null): string | null {
+  if (!image) return null;
+  if (image.startsWith("https://")) return image;
+  if (image.startsWith("/") && !image.startsWith("//") && !image.includes("..")) {
+    return image;
+  }
+  return null;
 }
 
 /**
@@ -96,7 +142,31 @@ function toToolProduct(card: ProductCard, currency: string): ToolProduct {
     rating:
       card.ratingCount > 0 ? { average: card.ratingAvg, count: card.ratingCount } : null,
     url: `/p/${card.slug}`,
+    image: toImageUrl(card.image),
   };
+}
+
+/**
+ * The same product, minus the image, for the model's context.
+ *
+ * The full object goes down the stream to the browser as the tool result the
+ * panel renders; this is what the agent loop puts back into the prompt. A URL
+ * in the model's context is a URL the model can be argued into repeating in
+ * its answer, and the renderer's allowlist would then have to be the only
+ * thing stopping it. Dropping it here means there is nothing to repeat.
+ */
+function forModel(product: ToolProduct): Omit<ToolProduct, "image"> {
+  const { image: _image, ...rest } = product;
+  return rest;
+}
+
+/**
+ * `toModelOutput` wants a provider-shaped value; every result here is an
+ * object, so it is always JSON. Wrapping it in one place keeps the cast to one
+ * line instead of one per tool.
+ */
+function modelJson(value: unknown) {
+  return { type: "json" as const, value: value as JSONValue };
 }
 
 /**
@@ -112,6 +182,61 @@ interface ToolVariant {
   color: string;
   price: string;
   inStock: boolean;
+}
+
+/**
+ * One line of the caller's own cart.
+ *
+ * Addressed by `variantId`, which is the handle every cart tool takes. The
+ * cart's id and the cart-*item*'s id are both absent on purpose: they are row
+ * handles the model has no use for, and a second identifier is a second thing
+ * for it to pass to the wrong tool.
+ *
+ * `issue` is the storefront's own word for a line that cannot be bought as it
+ * stands, passed through so the assistant can say "the medium sold out while
+ * it was in your basket" instead of discovering it at checkout.
+ */
+interface ToolCartLine {
+  variantId: string;
+  title: string;
+  size: string;
+  color: string;
+  quantity: number;
+  unitPrice: string;
+  lineTotal: string;
+  url: string;
+  issue: string | null;
+  /** Client-side only, like `ToolProduct.image`. */
+  image: string | null;
+}
+
+function toToolCartLine(line: CartLine): ToolCartLine {
+  return {
+    variantId: line.variantId,
+    title: sanitizeText(line.productTitle, TITLE_MAX),
+    size: sanitizeText(line.size, 16),
+    color: sanitizeText(line.colorName, 32),
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    lineTotal: line.lineTotal,
+    url: `/p/${line.productSlug}`,
+    issue: line.issue,
+    image: toImageUrl(line.image),
+  };
+}
+
+function lineForModel(line: ToolCartLine): Omit<ToolCartLine, "image"> {
+  const { image: _image, ...rest } = line;
+  return rest;
+}
+
+/** Counts and money only — what a write tool reports after changing a cart. */
+function toCartTotals(cart: CartView) {
+  return {
+    itemCount: cart.itemCount,
+    subtotal: cart.subtotal,
+    currency: cart.currency,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -155,6 +280,12 @@ function buildQuery(input: {
 
 type ToolFailure = { ok: false; message: string };
 type ProductList = { ok: true; products: ToolProduct[]; note?: string };
+
+function listForModel(output: ProductList | ToolFailure) {
+  return "products" in output
+    ? { ...output, products: output.products.map(forModel) }
+    : output;
+}
 
 const NO_MATCHES: ProductList = {
   ok: true,
@@ -250,8 +381,16 @@ function toToolDetail(product: ProductDetail, currency: string, reviews: string[
       reviews,
       variants,
       url: `/p/${product.slug}`,
+      image: toImageUrl(product.images[0] ?? null),
     },
   };
+}
+
+type ToolDetail = ReturnType<typeof toToolDetail>;
+
+function detailForModel(result: ToolDetail) {
+  const { image: _image, ...product } = result.product;
+  return { ...result, product };
 }
 
 // ---------------------------------------------------------------------------
@@ -283,6 +422,7 @@ export function buildAssistantTools(userId: string): ToolSet {
           return failed("searchProducts", error);
         }
       },
+      toModelOutput: ({ output }) => modelJson(listForModel(output)),
     }),
 
     recommendByInterest: tool({
@@ -313,6 +453,7 @@ export function buildAssistantTools(userId: string): ToolSet {
           return failed("recommendByInterest", error);
         }
       },
+      toModelOutput: ({ output }) => modelJson(listForModel(output)),
     }),
 
     getProductDetails: tool({
@@ -335,6 +476,8 @@ export function buildAssistantTools(userId: string): ToolSet {
           return failed("getProductDetails", error);
         }
       },
+      toModelOutput: ({ output }) =>
+        modelJson("product" in output ? detailForModel(output) : output),
     }),
 
     filterByBudget: tool({
@@ -348,16 +491,18 @@ export function buildAssistantTools(userId: string): ToolSet {
           return failed("filterByBudget", error);
         }
       },
+      toModelOutput: ({ output }) => modelJson(listForModel(output)),
     }),
 
     /**
-     * The only write tool in F5, and the only one that matters for SEC-2.
+     * The cart writes — the tools that matter for SEC-2.
      *
-     * It fills a cart. It cannot place an order, take a payment, apply a
-     * discount or empty a cart — those routes exist, and none of them is
-     * reachable from here. The shopper reviews the cart and checks out
-     * themselves; that is the human in the loop, and it is a structural fact
-     * about the tool set rather than a promise in the prompt.
+     * Between them they fill, adjust and prune a basket. None of them can
+     * place an order, take a payment, apply a discount or empty a cart in one
+     * call; those routes exist, and none of them is reachable from here. The
+     * shopper reviews the cart and checks out themselves; that is the human in
+     * the loop, and it is a structural fact about the tool set rather than a
+     * promise in the prompt.
      */
     addToCart: tool({
       description:
@@ -405,6 +550,142 @@ export function buildAssistantTools(userId: string): ToolSet {
           };
         } catch (error) {
           return failed("addToCart", error);
+        }
+      },
+    }),
+
+    /**
+     * Reading the caller's own cart, in full.
+     *
+     * The prompt already carries a one-line summary of the cart as it stood
+     * when the turn began (`buildCartSummary`). This is the live version, and
+     * more importantly it is the one that carries a `variantId` per line —
+     * without it the model would have no legitimate way to name the line the
+     * shopper wants changed, and "remove the trousers" would be a guess.
+     */
+    viewCart: tool({
+      description:
+        "Read the shopper's own cart: every line with its size, colour, quantity, price and variantId, plus the item count and subtotal. Call this before changing or removing anything, so you are working from the variantId of a line that actually exists.",
+      inputSchema: viewCartInput,
+      execute: async () => {
+        try {
+          const cart = await getCartView({ kind: "user", userId });
+          return {
+            ok: true as const,
+            cart: {
+              ...toCartTotals(cart),
+              lines: cart.lines.map(toToolCartLine),
+            },
+            note:
+              cart.lines.length === 0
+                ? "The cart is empty."
+                : "That subtotal covers the items only. Shipping and tax are worked out at /cart, not by you.",
+          };
+        } catch (error) {
+          return failed("viewCart", error);
+        }
+      },
+      toModelOutput: ({ output }) =>
+        modelJson(
+          "cart" in output
+            ? {
+                ...output,
+                cart: { ...output.cart, lines: output.cart.lines.map(lineForModel) },
+              }
+            : output,
+        ),
+    }),
+
+    /**
+     * Taking one line back out.
+     *
+     * Scoped to the caller's cart inside the service (SEC-23), so a variantId
+     * belonging to somebody else's cart deletes nothing rather than being
+     * fetched and then checked.
+     *
+     * One line per call, and there is no bulk or "empty" variant. That is the
+     * blast radius of this tool being talked into firing: a single named line
+     * the shopper can add back in one click, on a cart they are looking at.
+     * A tool that emptied a basket would be a tool worth injecting for.
+     */
+    removeFromCart: tool({
+      description:
+        "Take one line out of the shopper's own cart, identified by the variantId viewCart returned. Only ever call this when the shopper has asked for that item to go. It removes one line — there is no way to empty a cart, and you must not call it repeatedly to imitate one.",
+      inputSchema: removeFromCartInput,
+      execute: async ({ variantId }) => {
+        try {
+          const owner = { kind: "user" as const, userId };
+          const result = await removeItemByVariant(owner, variantId);
+
+          if (!result.ok || !result.removed) {
+            return {
+              ok: false as const,
+              message:
+                "That item is not in the shopper's cart. Call viewCart and use a variantId from it.",
+            };
+          }
+
+          return {
+            ok: true as const,
+            removed: {
+              title: sanitizeText(result.removed.productTitle, TITLE_MAX),
+              size: sanitizeText(result.removed.size, 16),
+              color: sanitizeText(result.removed.colorName, 32),
+              quantity: result.removed.quantity,
+            },
+            cart: toCartTotals(result.cart),
+            note: "Removed from the shopper's cart. Say what you took out, so they can put it back if you misread them.",
+          };
+        } catch (error) {
+          return failed("removeFromCart", error);
+        }
+      },
+    }),
+
+    /**
+     * Changing how many of a line.
+     *
+     * Absolute, not a delta, and clamped in the service to stock on hand and
+     * to the per-line cap — the model states an intent and the server decides
+     * what is possible, exactly as the human quantity control does.
+     */
+    updateCartQuantity: tool({
+      description:
+        "Change how many of one cart line the shopper wants, identified by the variantId viewCart returned. The quantity is absolute, not a difference, and it may come back lower if there is less stock. To take the line out entirely use removeFromCart.",
+      inputSchema: updateCartQuantityInput,
+      execute: async ({ variantId, quantity }) => {
+        try {
+          const owner = { kind: "user" as const, userId };
+          const result = await setItemQuantityByVariant(owner, variantId, quantity);
+
+          if (!result.ok) {
+            return {
+              ok: false as const,
+              message:
+                "That item is not in the shopper's cart. Call viewCart and use a variantId from it.",
+            };
+          }
+
+          const line = result.cart.lines.find((entry) => entry.variantId === variantId);
+          return {
+            ok: true as const,
+            line: line
+              ? {
+                  title: sanitizeText(line.productTitle, TITLE_MAX),
+                  size: sanitizeText(line.size, 16),
+                  color: sanitizeText(line.colorName, 32),
+                  quantity: line.quantity,
+                  lineTotal: line.lineTotal,
+                  currency: result.cart.currency,
+                }
+              : null,
+            cart: toCartTotals(result.cart),
+            // The clamp is silent in the service, so it has to be spoken here:
+            // a shopper told "done" who then sees 3 instead of 10 was misled.
+            note: "Quantity set. If it came back lower than asked, that is all the stock there is — say so.",
+          };
+        } catch (error) {
+          return failed("updateCartQuantity", error);
         }
       },
     }),
