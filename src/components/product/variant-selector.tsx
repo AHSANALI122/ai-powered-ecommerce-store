@@ -111,13 +111,16 @@ export function VariantSelector({
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-2xl font-semibold tabular-nums" aria-live="polite">
+      <p
+        className="font-display text-3xl font-semibold tabular-nums transition-opacity duration-300"
+        aria-live="polite"
+      >
         {selected ? formatMoney(selected.price, currency) : "—"}
       </p>
 
       <fieldset className="flex flex-col gap-3">
-        <legend className="text-sm font-medium">
-          Colour: <span className="font-normal">{color}</span>
+        <legend className="text-xs uppercase tracking-[0.16em] text-[var(--color-muted)]">
+          Colour: <span className="text-[var(--color-ink)]">{color}</span>
         </legend>
         <div className="flex flex-wrap gap-2">
           {colors.map((entry) => {
@@ -131,11 +134,11 @@ export function VariantSelector({
                 onClick={() => chooseColor(entry.name)}
                 aria-pressed={entry.name === color}
                 title={anyInStock ? entry.name : `${entry.name} — sold out`}
-                className="flex items-center gap-2 rounded-md border border-[var(--color-line)] px-2.5 py-1.5 text-xs aria-pressed:border-[var(--color-ink)] aria-pressed:ring-1 aria-pressed:ring-[var(--color-ink)]"
+                className="flex items-center gap-2 rounded-full border border-[var(--color-line)] px-3 py-1.5 text-xs transition-[border-color,box-shadow,transform] duration-200 ease-[var(--ease-interaction)] hover:-translate-y-0.5 hover:border-[var(--color-ink)] aria-pressed:border-[var(--color-ink)] aria-pressed:shadow-[var(--shadow-card)] aria-pressed:ring-1 aria-pressed:ring-[var(--color-ink)]"
               >
                 <span
                   aria-hidden="true"
-                  className="size-4 rounded-full border border-black/10"
+                  className="size-4 rounded-full border border-black/10 shadow-sm"
                   style={{ backgroundColor: entry.hex }}
                 />
                 <span className={anyInStock ? "" : "line-through opacity-60"}>
@@ -148,7 +151,9 @@ export function VariantSelector({
       </fieldset>
 
       <fieldset className="flex flex-col gap-3">
-        <legend className="text-sm font-medium">Size</legend>
+        <legend className="text-xs uppercase tracking-[0.16em] text-[var(--color-muted)]">
+          Size
+        </legend>
         <div className="flex flex-wrap gap-2">
           {sizes.map((option) => {
             const variant = variants.find(
@@ -169,7 +174,7 @@ export function VariantSelector({
                       ? "Sold out"
                       : undefined
                 }
-                className="min-w-12 rounded-md border border-[var(--color-line)] px-3 py-1.5 text-sm aria-pressed:border-[var(--color-ink)] aria-pressed:bg-[var(--color-ink)] aria-pressed:text-[var(--color-surface)] disabled:cursor-not-allowed disabled:line-through disabled:opacity-40"
+                className="min-w-12 rounded-full border border-[var(--color-line)] px-3.5 py-2 text-sm transition-[border-color,background-color,color,transform] duration-200 ease-[var(--ease-interaction)] hover:-translate-y-0.5 hover:border-[var(--color-ink)] aria-pressed:border-[var(--color-ink)] aria-pressed:bg-[var(--color-ink)] aria-pressed:text-[var(--color-surface)] disabled:cursor-not-allowed disabled:line-through disabled:opacity-40 disabled:hover:translate-y-0"
               >
                 {option}
               </button>
@@ -181,11 +186,23 @@ export function VariantSelector({
       <p
         className={
           availability.tone === "warn"
-            ? "text-sm text-amber-700 dark:text-amber-500"
-            : "text-sm text-[var(--color-muted)]"
+            ? "flex items-center gap-2 text-sm text-amber-700 dark:text-amber-500"
+            : "flex items-center gap-2 text-sm text-[var(--color-muted)]"
         }
         aria-live="polite"
       >
+        {/* The dot is decoration on top of the words, never instead of them:
+            colour alone is not a way to say "sold out" (spec §7). */}
+        <span
+          aria-hidden="true"
+          className={`size-2 shrink-0 rounded-full ${
+            availability.tone === "ok"
+              ? "bg-emerald-500"
+              : availability.tone === "warn"
+                ? "bg-amber-500"
+                : "bg-[var(--color-muted)]"
+          }`}
+        />
         {availability.label}
         {selected ? (
           <span className="ml-2 text-xs text-[var(--color-muted)]">

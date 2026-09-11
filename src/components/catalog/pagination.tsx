@@ -38,7 +38,7 @@ export function Pagination({
         <Link
           href={href(page - 1)}
           rel="prev"
-          className="rounded-md border border-[var(--color-line)] px-3 py-1.5 text-sm"
+          className="rounded-full border border-[var(--color-line)] px-4 py-1.5 text-sm transition-[border-color,transform,box-shadow] duration-200 ease-[var(--ease-interaction)] hover:-translate-y-0.5 hover:border-[var(--color-ink)] hover:shadow-[var(--shadow-card)]"
         >
           Previous
         </Link>
@@ -51,7 +51,7 @@ export function Pagination({
           key={target}
           href={href(target)}
           aria-current={target === page ? "page" : undefined}
-          className="rounded-md border border-[var(--color-line)] px-3 py-1.5 text-sm aria-[current=page]:bg-[var(--color-ink)] aria-[current=page]:text-[var(--color-surface)]"
+          className="min-w-10 rounded-full border border-[var(--color-line)] px-3 py-1.5 text-center text-sm transition-[border-color,background-color,transform] duration-200 ease-[var(--ease-interaction)] hover:-translate-y-0.5 hover:border-[var(--color-ink)] aria-[current=page]:border-[var(--color-ink)] aria-[current=page]:bg-[var(--color-ink)] aria-[current=page]:text-[var(--color-surface)]"
         >
           {target}
         </Link>
@@ -63,7 +63,7 @@ export function Pagination({
         <Link
           href={href(page + 1)}
           rel="next"
-          className="rounded-md border border-[var(--color-line)] px-3 py-1.5 text-sm"
+          className="rounded-full border border-[var(--color-line)] px-4 py-1.5 text-sm transition-[border-color,transform,box-shadow] duration-200 ease-[var(--ease-interaction)] hover:-translate-y-0.5 hover:border-[var(--color-ink)] hover:shadow-[var(--shadow-card)]"
         >
           Next
         </Link>

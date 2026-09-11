@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/client/api";
 import { formatMoney } from "@/lib/money";
 import { runtimeRoute } from "@/lib/routes";
 import { useCartStore, type CartResponse } from "@/stores/cart";
+import { buttonClass, surfaceClass } from "@/components/ui/button";
 
 type Cart = CartResponse["cart"];
 type Line = Cart["lines"][number];
@@ -78,12 +79,23 @@ export function CartClient({
 
   if (cart.lines.length === 0) {
     return (
-      <div className="flex flex-col items-start gap-4 rounded-lg border border-[var(--color-line)] p-8">
-        <p className="text-sm text-[var(--color-muted)]">Your cart is empty.</p>
-        <Link
-          href="/"
-          className="rounded-md bg-[var(--color-ink)] px-4 py-2 text-sm font-medium text-[var(--color-surface)]"
+      <div
+        className={surfaceClass(
+          "animate-fade-up flex flex-col items-center gap-4 px-8 py-16 text-center",
+        )}
+      >
+        <span
+          aria-hidden="true"
+          className="flex size-14 items-center justify-center rounded-full bg-[var(--color-subtle)] text-2xl"
         >
+          🧺
+        </span>
+        <p className="font-display text-xl font-semibold">Your cart is empty</p>
+        <p className="max-w-sm text-sm text-[var(--color-muted)]">
+          Nothing is reserved until a payment is confirmed, so anything you add here is
+          still yours to change.
+        </p>
+        <Link href="/" className={buttonClass({ size: "lg" })}>
           Browse the catalogue
         </Link>
       </div>
@@ -96,11 +108,15 @@ export function CartClient({
         {cart.lines.map((line) => (
           <li
             key={line.id}
-            className="flex gap-4 rounded-lg border border-[var(--color-line)] p-4"
+            className={surfaceClass(
+              `group animate-fade-up flex gap-4 p-4 transition-opacity duration-200 ${
+                pending && busyLine === line.id ? "opacity-60" : ""
+              }`,
+            )}
           >
             <Link
               href={runtimeRoute(`/p/${line.productSlug}`)}
-              className="relative size-24 shrink-0 overflow-hidden rounded-md bg-black/[0.03]"
+              className="relative size-24 shrink-0 overflow-hidden rounded-lg bg-[var(--color-subtle)]"
             >
               {line.image ? (
                 <Image
@@ -108,7 +124,7 @@ export function CartClient({
                   alt=""
                   fill
                   sizes="96px"
-                  className="object-cover"
+                  className="object-cover transition-transform duration-500 ease-[var(--ease-entrance)] group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                 />
               ) : null}
             </Link>
@@ -118,7 +134,7 @@ export function CartClient({
                 <div>
                   <Link
                     href={runtimeRoute(`/p/${line.productSlug}`)}
-                    className="font-medium underline-offset-4 hover:underline"
+                    className="link-sweep font-medium"
                   >
                     {line.productTitle}
                   </Link>
@@ -126,13 +142,13 @@ export function CartClient({
                     {line.colorName} · {line.size} · SKU {line.sku}
                   </p>
                 </div>
-                <p className="tabular-nums">
+                <p className="font-medium tabular-nums">
                   {formatMoney(line.lineTotal, cart.currency)}
                 </p>
               </div>
 
               {line.issue ? (
-                <p className="text-sm text-red-600">
+                <p className="animate-fade-in text-sm text-red-600">
                   {ISSUE_LABEL[line.issue]}
                   {line.issue === "INSUFFICIENT_STOCK"
                     ? ` — only ${line.available} left.`
@@ -141,23 +157,40 @@ export function CartClient({
               ) : null}
 
               <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 text-sm">
-                  <span className="text-[var(--color-muted)]">Qty</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={Math.max(line.available, 1)}
-                    value={line.quantity}
-                    disabled={pending && busyLine === line.id}
-                    onChange={(event) => {
-                      const next = Number(event.target.value);
-                      if (Number.isInteger(next) && next >= 1) {
-                        changeQuantity(line, next);
-                      }
-                    }}
-                    className="w-16 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-sm tabular-nums"
-                  />
-                </label>
+                {/* A stepper rather than a number input: the two operations a
+                    shopper actually performs on a cart line are "one more" and
+                    "one fewer", and each is a labelled button a screen reader
+                    can announce. The count between them is the live region, so
+                    a change is spoken without moving focus. */}
+                <div className="flex items-center gap-1 rounded-full border border-[var(--color-line)] p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => changeQuantity(line, line.quantity - 1)}
+                    disabled={line.quantity <= 1 || (pending && busyLine === line.id)}
+                    aria-label={`Reduce quantity of ${line.productTitle}`}
+                    className="flex size-7 items-center justify-center rounded-full text-sm transition-colors duration-200 hover:bg-[var(--color-subtle)] disabled:opacity-35"
+                  >
+                    <span aria-hidden="true">−</span>
+                  </button>
+                  <span
+                    aria-live="polite"
+                    className="min-w-6 text-center text-sm tabular-nums"
+                  >
+                    {line.quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => changeQuantity(line, line.quantity + 1)}
+                    disabled={
+                      line.quantity >= Math.max(line.available, 1) ||
+                      (pending && busyLine === line.id)
+                    }
+                    aria-label={`Increase quantity of ${line.productTitle}`}
+                    className="flex size-7 items-center justify-center rounded-full text-sm transition-colors duration-200 hover:bg-[var(--color-subtle)] disabled:opacity-35"
+                  >
+                    <span aria-hidden="true">+</span>
+                  </button>
+                </div>
                 <span className="text-sm text-[var(--color-muted)] tabular-nums">
                   {formatMoney(line.unitPrice, cart.currency)} each
                 </span>
@@ -165,7 +198,7 @@ export function CartClient({
                   type="button"
                   onClick={() => remove(line)}
                   disabled={pending && busyLine === line.id}
-                  className="ml-auto text-sm text-[var(--color-muted)] underline underline-offset-4 disabled:opacity-50"
+                  className="link-sweep ml-auto text-sm text-[var(--color-muted)] transition-colors duration-200 hover:text-[var(--color-ink)] disabled:opacity-50"
                 >
                   Remove
                 </button>
@@ -175,14 +208,18 @@ export function CartClient({
         ))}
       </ul>
 
-      <aside className="flex w-full flex-col gap-4 rounded-lg border border-[var(--color-line)] p-6 lg:w-80">
-        <h2 className="text-lg font-medium">Summary</h2>
+      <aside
+        className={surfaceClass(
+          "flex w-full flex-col gap-4 p-6 lg:sticky lg:top-28 lg:w-80",
+        )}
+      >
+        <h2 className="font-display text-lg font-semibold">Summary</h2>
 
         <div className="flex justify-between text-sm">
           <span className="text-[var(--color-muted)]">
             Subtotal ({cart.itemCount} item{cart.itemCount === 1 ? "" : "s"})
           </span>
-          <span className="tabular-nums">
+          <span className="text-base font-medium tabular-nums">
             {formatMoney(cart.subtotal, cart.currency)}
           </span>
         </div>
@@ -191,13 +228,13 @@ export function CartClient({
         </p>
 
         {error ? (
-          <p role="alert" className="text-sm text-red-600">
+          <p role="alert" className="animate-fade-up text-sm text-red-600">
             {error}
           </p>
         ) : null}
 
         {cart.hasIssues ? (
-          <p className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm">
+          <p className="animate-fade-up rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm">
             Remove or reduce the flagged items before checking out.
           </p>
         ) : null}
@@ -205,7 +242,7 @@ export function CartClient({
         {!isSignedIn ? (
           <Link
             href="/login?next=%2Fcheckout"
-            className="rounded-md bg-[var(--color-ink)] px-4 py-2 text-center text-sm font-medium text-[var(--color-surface)]"
+            className={buttonClass({ size: "lg", className: "w-full" })}
           >
             Sign in to check out
           </Link>
@@ -216,7 +253,11 @@ export function CartClient({
             </p>
             <Link
               href="/account"
-              className="rounded-md border border-[var(--color-line)] px-4 py-2 text-center text-sm font-medium"
+              className={buttonClass({
+                variant: "secondary",
+                size: "lg",
+                className: "w-full",
+              })}
             >
               Go to your account
             </Link>
@@ -225,13 +266,15 @@ export function CartClient({
           <Link
             href="/checkout"
             aria-disabled={cart.hasIssues}
-            className={
-              cart.hasIssues
-                ? "pointer-events-none rounded-md bg-[var(--color-ink)] px-4 py-2 text-center text-sm font-medium text-[var(--color-surface)] opacity-50"
-                : "rounded-md bg-[var(--color-ink)] px-4 py-2 text-center text-sm font-medium text-[var(--color-surface)]"
-            }
+            className={buttonClass({
+              size: "lg",
+              className: cart.hasIssues
+                ? "pointer-events-none w-full opacity-50"
+                : "w-full",
+            })}
           >
             Check out
+            <span aria-hidden="true">→</span>
           </Link>
         )}
       </aside>

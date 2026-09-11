@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { postJson } from "@/lib/client/api";
 import { useCartStore, type CartResponse } from "@/stores/cart";
+import { buttonClass } from "@/components/ui/button";
 
 /**
  * Add-to-cart (F3).
@@ -56,18 +57,40 @@ export function AddToCart({
         onClick={submit}
         disabled={disabled || pending || !variantId}
         title={disabled ? disabledReason : undefined}
-        className="rounded-md bg-[var(--color-ink)] px-5 py-3 text-sm font-medium text-[var(--color-surface)] transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+        className={buttonClass({
+          size: "lg",
+          className: "w-full disabled:cursor-not-allowed",
+        })}
       >
-        {pending ? "Adding…" : "Add to cart"}
+        {/* The spinner replaces the label rather than sitting beside it, so the
+            button does not change width mid-request and shift the column. */}
+        {pending ? (
+          <>
+            <span
+              aria-hidden="true"
+              className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+            />
+            Adding…
+          </>
+        ) : added ? (
+          <>
+            <span aria-hidden="true">✓</span>
+            Added to cart
+          </>
+        ) : (
+          "Add to cart"
+        )}
       </button>
 
+      {/* Reserves its line whether or not there is anything to say, so the
+          layout under the button never jumps when a message appears (CLS). */}
       <p role="status" aria-live="polite" className="min-h-5 text-sm">
         {error ? (
-          <span className="text-red-600">{error}</span>
+          <span className="animate-fade-in text-red-600">{error}</span>
         ) : added ? (
-          <span className="text-[var(--color-muted)]">
+          <span className="animate-fade-in text-[var(--color-muted)]">
             Added.{" "}
-            <Link href="/cart" className="underline underline-offset-4">
+            <Link href="/cart" className="link-sweep font-medium text-[var(--color-ink)]">
               View cart
             </Link>
           </span>

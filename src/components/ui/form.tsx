@@ -2,6 +2,7 @@
 
 import type { InputHTMLAttributes, ReactNode } from "react";
 import { useId } from "react";
+import { buttonClass } from "@/components/ui/button";
 
 /**
  * Small form primitives shared by the account screens.
@@ -37,7 +38,7 @@ export function TextField({ label, hint, errors, ...input }: TextFieldProps) {
         {...input}
         aria-invalid={hasErrors || undefined}
         aria-describedby={describedBy}
-        className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ink)] aria-[invalid=true]:border-red-600"
+        className="rounded-lg border border-[var(--color-line)] bg-[var(--color-elevated)] px-3.5 py-2.5 text-sm outline-none transition-[border-color,box-shadow] duration-200 ease-[var(--ease-interaction)] hover:border-[var(--color-muted)] focus:border-[var(--color-ink)] focus:shadow-[var(--shadow-card)] aria-[invalid=true]:border-red-600"
       />
       {hint ? (
         <p id={hintId} className="text-xs text-[var(--color-muted)]">
@@ -58,7 +59,7 @@ export function FormError({ children }: { children: ReactNode }) {
   return (
     <p
       role="alert"
-      className="rounded-md border border-red-600/30 bg-red-600/5 px-3 py-2 text-sm text-red-700 dark:text-red-400"
+      className="animate-fade-up rounded-lg border border-red-600/30 bg-red-600/5 px-3.5 py-2.5 text-sm text-red-700 dark:text-red-400"
     >
       {children}
     </p>
@@ -70,7 +71,7 @@ export function FormNotice({ children }: { children: ReactNode }) {
   return (
     <p
       role="status"
-      className="rounded-md border border-[var(--color-line)] bg-black/[0.03] px-3 py-2 text-sm dark:bg-white/[0.04]"
+      className="animate-fade-up rounded-lg border border-[var(--color-line)] bg-[var(--color-subtle)] px-3.5 py-2.5 text-sm"
     >
       {children}
     </p>
@@ -88,9 +89,21 @@ export function SubmitButton({
     <button
       type="submit"
       disabled={pending}
-      className="rounded-md bg-[var(--color-ink)] px-4 py-2 text-sm font-medium text-[var(--color-surface)] transition-opacity disabled:opacity-60"
+      className={buttonClass({ size: "lg", className: "w-full sm:w-auto" })}
     >
-      {pending ? "Working…" : children}
+      {/* The spinner is the only thing that changes while a form is in flight;
+          the label stays put so the button does not resize under the cursor. */}
+      {pending ? (
+        <>
+          <span
+            aria-hidden="true"
+            className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+          />
+          Working…
+        </>
+      ) : (
+        children
+      )}
     </button>
   );
 }

@@ -38,9 +38,12 @@ export async function ProductReviews({
     <section
       id="reviews"
       aria-labelledby="reviews-heading"
-      className="flex flex-col gap-8 border-t border-[var(--color-line)] pt-10"
+      className="reveal flex flex-col gap-8 border-t border-[var(--color-line)] pt-10"
     >
-      <h2 id="reviews-heading" className="text-lg font-semibold tracking-tight">
+      <h2
+        id="reviews-heading"
+        className="font-display text-2xl font-semibold tracking-tight"
+      >
         Reviews
       </h2>
 
@@ -49,7 +52,7 @@ export async function ProductReviews({
           {ratingCount > 0 ? (
             <div className="flex flex-col gap-3">
               <div className="flex items-baseline gap-3">
-                <p className="text-3xl font-semibold tabular-nums">
+                <p className="font-display text-4xl font-semibold tabular-nums">
                   {ratingAvg.toFixed(1)}
                 </p>
                 <Stars rating={ratingAvg} size="md" />

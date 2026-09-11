@@ -1,13 +1,48 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Design tokens.
+
+   Two families of colour, and the distinction is what keeps the palette from
+   drifting: ink / muted / line are text and structure, surface / elevated /
+   subtle are the planes they sit on. A component asks for a role, never a
+   shade, so dark mode is one block of overrides at the bottom of this file
+   rather than a `dark:` class on every element.
+
+   `accent` is used sparingly on purpose — a price that is on offer, the active
+   filter, the assistant's mark. If it appears on every surface it stops
+   meaning anything.
+--------------------------------------------------------------------------- */
+
 @theme {
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
-  --color-ink: oklch(0.21 0.01 260);
-  --color-muted: oklch(0.53 0.01 260);
-  --color-line: oklch(0.92 0.004 260);
-  --color-surface: oklch(0.99 0.002 260);
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-display: var(--font-playfair), Georgia, "Times New Roman", serif;
+
+  --color-ink: oklch(0.19 0.012 265);
+  --color-muted: oklch(0.52 0.014 265);
+  --color-line: oklch(0.91 0.005 265);
+  --color-surface: oklch(0.99 0.003 90);
+  --color-elevated: oklch(1 0 0);
+  --color-subtle: oklch(0.965 0.005 90);
+  --color-accent: oklch(0.53 0.13 32);
+  --color-accent-soft: oklch(0.94 0.03 40);
+  --color-accent-ink: oklch(0.99 0.003 90);
+
+  --radius-card: 0.875rem;
+
+  --shadow-card:
+    0 1px 2px oklch(0.2 0.02 265 / 0.05), 0 8px 24px oklch(0.2 0.02 265 / 0.06);
+  --shadow-lift:
+    0 2px 4px oklch(0.2 0.02 265 / 0.06), 0 18px 40px oklch(0.2 0.02 265 / 0.12);
+  --shadow-panel:
+    0 4px 12px oklch(0.2 0.02 265 / 0.08), 0 28px 60px oklch(0.2 0.02 265 / 0.18);
+
+  /* One easing curve for entrances and one for interactions. Two curves is a
+     house style; five is a page that feels assembled from different sites. */
+  --ease-entrance: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-interaction: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 :root {
@@ -19,23 +54,272 @@ body {
   height: 100%;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--color-surface);
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-ink: oklch(0.95 0.005 260);
-    --color-muted: oklch(0.68 0.01 260);
-    --color-line: oklch(0.29 0.008 260);
-    --color-surface: oklch(0.17 0.008 260);
+::selection {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+/* One focus ring for the whole site. Stated once here so no component has to
+   remember it, and so it cannot be styled away to nothing (spec §7). */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Motion.
+
+   Almost all of it is CSS. A scroll-reveal or a hover lift that needs
+   JavaScript is one that does not happen until hydration, on a site whose
+   catalogue pages are deliberately prerendered — so the animations that
+   decorate static markup are keyframes here, and the `motion` library is kept
+   for the few places that animate in response to state.
+--------------------------------------------------------------------------- */
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
-/* NFR: animations must respect reduced-motion (spec §7). */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.28);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* The skeleton sweep. `background-position` rather than `left`, so it stays on
+   the compositor and never triggers layout. */
+@keyframes shimmer-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes progress-sweep {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@utility animate-fade-up {
+  animation: fade-up 0.55s var(--ease-entrance) both;
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.5s var(--ease-entrance) both;
+}
+
+@utility animate-scale-in {
+  animation: scale-in 0.32s var(--ease-entrance) both;
+}
+
+@utility animate-pop {
+  animation: pop 0.4s var(--ease-interaction);
+}
+
+@utility shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-subtle) 0%,
+    var(--color-line) 40%,
+    var(--color-subtle) 80%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-sweep 1.4s linear infinite;
+}
+
+/**
+ * Staggered entrance for a list of siblings.
+ *
+ * The delay is per child rather than per item prop, so a server-rendered grid
+ * gets the effect with no client component and no inline style attribute. Ten
+ * steps is the cap: past that the last card arrives late enough to read as a
+ * bug rather than as choreography.
+ */
+.stagger > * {
+  animation: fade-up 0.55s var(--ease-entrance) both;
+}
+.stagger > *:nth-child(1) {
+  animation-delay: 0.02s;
+}
+.stagger > *:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.stagger > *:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.stagger > *:nth-child(4) {
+  animation-delay: 0.14s;
+}
+.stagger > *:nth-child(5) {
+  animation-delay: 0.18s;
+}
+.stagger > *:nth-child(6) {
+  animation-delay: 0.22s;
+}
+.stagger > *:nth-child(7) {
+  animation-delay: 0.26s;
+}
+.stagger > *:nth-child(8) {
+  animation-delay: 0.3s;
+}
+.stagger > *:nth-child(n + 9) {
+  animation-delay: 0.34s;
+}
+
+/**
+ * Scroll-reveal with no JavaScript.
+ *
+ * `animation-timeline: view()` drives the entrance from the element's own
+ * position in the viewport, so it works on prerendered HTML before hydration
+ * and costs nothing at runtime. Where it is unsupported the `@supports` guard
+ * never applies it and the content is simply visible — the fallback is the
+ * correct final state, not an element hidden while waiting for a feature.
+ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: fade-up 1s var(--ease-entrance) both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 20%;
+    }
+  }
+}
+
+/** An underline that grows from the left instead of blinking on. */
+@utility link-sweep {
+  position: relative;
+}
+
+.link-sweep::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  height: 1px;
+  width: 100%;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.28s var(--ease-interaction);
+}
+
+.link-sweep:hover::after,
+.link-sweep:focus-visible::after,
+.link-sweep[data-active="true"]::after {
+  transform: scaleX(1);
+}
+
+/** The card hover: lift the surface, and let the image inside scale with it. */
+@utility card-lift {
+  transition:
+    transform 0.35s var(--ease-entrance),
+    box-shadow 0.35s var(--ease-entrance),
+    border-color 0.35s var(--ease-entrance);
+}
+
+.card-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lift);
+}
+
+/* ---------------------------------------------------------------------------
+   Dark mode. Roles only — nothing here names a component.
+--------------------------------------------------------------------------- */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-ink: oklch(0.96 0.004 265);
+    --color-muted: oklch(0.7 0.012 265);
+    --color-line: oklch(0.31 0.008 265);
+    --color-surface: oklch(0.16 0.008 265);
+    --color-elevated: oklch(0.21 0.009 265);
+    --color-subtle: oklch(0.24 0.008 265);
+    --color-accent: oklch(0.74 0.12 45);
+    --color-accent-soft: oklch(0.31 0.05 40);
+    --color-accent-ink: oklch(0.16 0.008 265);
+
+    --shadow-card: 0 1px 2px oklch(0 0 0 / 0.4), 0 8px 24px oklch(0 0 0 / 0.35);
+    --shadow-lift: 0 2px 4px oklch(0 0 0 / 0.45), 0 18px 40px oklch(0 0 0 / 0.5);
+    --shadow-panel: 0 4px 12px oklch(0 0 0 / 0.5), 0 28px 60px oklch(0 0 0 / 0.6);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   NFR: animation must respect reduced-motion (spec §7).
+
+   Last word in the file, and `!important` on purpose. Every entrance above
+   uses `both` fill, so collapsing the duration lands the element on its final
+   state immediately — visible, in place, not animating.
+
+   Worth knowing when testing: Windows' "Show animations in Windows" setting
+   maps straight onto this media query, so with it switched off the whole site
+   is deliberately still, and nothing below is a bug.
+--------------------------------------------------------------------------- */
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -44,5 +328,9 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  html {
+    scroll-behavior: auto;
   }
 }

@@ -73,18 +73,24 @@ export function WishlistButton({
         title={label}
         className={
           variant === "full"
-            ? "inline-flex items-center justify-center gap-2 rounded-md border border-[var(--color-line)] px-5 py-3 text-sm font-medium transition-colors hover:bg-black/[0.03] disabled:opacity-60 dark:hover:bg-white/[0.05]"
-            : "inline-flex size-9 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface)]/90 text-base transition-colors hover:bg-black/[0.04] disabled:opacity-60 dark:hover:bg-white/[0.06]"
+            ? "inline-flex w-full items-center justify-center gap-2 rounded-full border border-[var(--color-line)] px-5 py-3 text-sm font-medium transition-[background-color,border-color,transform,box-shadow] duration-200 ease-[var(--ease-interaction)] hover:border-[var(--color-ink)] hover:bg-[var(--color-subtle)] hover:shadow-[var(--shadow-card)] active:translate-y-px disabled:opacity-60"
+            : "inline-flex size-9 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-elevated)]/90 text-base transition-[background-color,border-color,transform,box-shadow] duration-200 ease-[var(--ease-interaction)] hover:border-[var(--color-ink)] hover:shadow-[var(--shadow-card)] active:translate-y-px disabled:opacity-60"
         }
       >
-        <span aria-hidden="true" className={saved ? "text-red-600" : ""}>
+        {/* Keyed on the state so the glyph remounts and the pop replays each
+            time it is filled — the same trick the cart badge uses. */}
+        <span
+          key={saved ? "saved" : "unsaved"}
+          aria-hidden="true"
+          className={saved ? "animate-pop text-red-600" : ""}
+        >
           {saved ? "♥" : "♡"}
         </span>
         {variant === "full" ? <span>{saved ? "Saved" : "Save"}</span> : null}
       </button>
 
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="animate-fade-in text-xs text-red-600">
           {error}
         </p>
       ) : null}

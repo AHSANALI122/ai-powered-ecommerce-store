@@ -31,7 +31,7 @@ export default async function SearchPage(props: PageProps<"/search">) {
   if (!term) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Search</h1>
+        <h1 className="font-display text-3xl font-semibold tracking-tight">Search</h1>
         <p className="text-sm text-[var(--color-muted)]">
           Type a product, brand or material into the search box above.
         </p>
@@ -58,22 +58,24 @@ export default async function SearchPage(props: PageProps<"/search">) {
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Results for “{term}”</h1>
-        <p className="text-sm text-[var(--color-muted)]">
+      <header className="animate-fade-up flex flex-col gap-1 border-b border-[var(--color-line)] pb-6">
+        <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--color-muted)]">
           {page.total} {page.total === 1 ? "match" : "matches"}
         </p>
+        <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+          Results for “{term}”
+        </h1>
       </header>
 
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-[16rem_1fr]">
-        <aside>
+        <aside className="lg:sticky lg:top-28 lg:max-h-[calc(100dvh-9rem)] lg:overflow-y-auto lg:pr-2">
           <FilterPanel action="/search" query={query} facets={facets} showSearchField />
         </aside>
 
         <div className="flex flex-col">
           {page.items.length === 0 ? (
-            <div className="flex flex-col gap-2 py-12">
-              <p className="text-sm">Nothing matched that.</p>
+            <div className="animate-fade-up flex flex-col gap-2 rounded-[var(--radius-card)] border border-dashed border-[var(--color-line)] px-6 py-16 text-center">
+              <p className="font-display text-lg font-semibold">Nothing matched that.</p>
               <p className="text-sm text-[var(--color-muted)]">
                 Try a shorter term, a brand name, or browse a category from the menu
                 above.

@@ -18,7 +18,7 @@ export function AccountNav() {
 
   if (status === "unknown") {
     return (
-      <Link href="/account" className="text-sm underline underline-offset-4">
+      <Link href="/account" className="link-sweep text-sm">
         Account
       </Link>
     );
@@ -27,10 +27,13 @@ export function AccountNav() {
   if (!user) {
     return (
       <div className="flex items-center gap-4 text-sm">
-        <Link href="/login" className="underline underline-offset-4">
+        <Link href="/login" className="link-sweep">
           Sign in
         </Link>
-        <Link href="/register" className="text-[var(--color-muted)]">
+        <Link
+          href="/register"
+          className="link-sweep text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)]"
+        >
           Register
         </Link>
       </div>
@@ -43,11 +46,11 @@ export function AccountNav() {
         // A label, not a control. The dashboard link lands here in F4; access
         // is enforced by the proxy and re-checked against the user row on every
         // admin route (SEC-7).
-        <span className="rounded border border-[var(--color-line)] px-2 py-0.5 text-xs uppercase tracking-wide text-[var(--color-muted)]">
+        <span className="rounded-full border border-[var(--color-accent)] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[var(--color-accent)]">
           {user.role.toLowerCase()}
         </span>
       ) : null}
-      <Link href="/account" className="underline underline-offset-4">
+      <Link href="/account" className="link-sweep max-w-28 truncate">
         {user.name ?? "Account"}
       </Link>
       <SignOutButton />

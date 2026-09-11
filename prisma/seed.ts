@@ -28,6 +28,15 @@ const prisma = new PrismaClient({ adapter: new PrismaNeon({ connectionString }) 
 const SEED_SOURCE = "pexels";
 const PLACEHOLDER_IMAGE = "/placeholder-product.svg";
 
+/**
+ * Every image on this site is displayed in a 3:4 box under `object-cover`
+ * (`product-gallery.tsx`, `product-card.tsx`), so the seed asks Pexels for that
+ * frame rather than cropping it in the browser. 1200x1600 is enough for the
+ * gallery at 2x on a laptop and still lands around 100 KB compressed.
+ */
+const IMAGE_WIDTH = 1200;
+const IMAGE_HEIGHT = 1600;
+
 // ---------------------------------------------------------------------------
 // Catalogue definition
 // ---------------------------------------------------------------------------
@@ -812,7 +821,35 @@ function stockFor(seed: string): number {
   return bucket === 0 ? 0 : bucket * 4;
 }
 
-type PexelsPhoto = { id: number; src: { large: string; medium: string } };
+type PexelsPhoto = {
+  id: number;
+  width: number;
+  height: number;
+  src: { original: string };
+};
+
+/**
+ * Builds the URL actually stored on a product row.
+ *
+ * Pexels' own presets are cut for a landscape card -- `large` is 940x650 -- and
+ * this catalogue renders everything portrait, so `object-cover` used to discard
+ * the sides and leave roughly 490px of real width behind a box that is often
+ * wider than that. `src.original` is the uncropped file (commonly 3000x4500)
+ * and the image CDN takes crop parameters, so asking it for the frame the site
+ * displays is both sharper and lighter than shipping the original bytes.
+ */
+function highResUrl(photo: PexelsPhoto): string {
+  const url = new URL(photo.src.original);
+  // `original` carries no query of its own today; clearing it keeps this honest
+  // if that ever changes.
+  url.search = "";
+  url.searchParams.set("auto", "compress");
+  url.searchParams.set("cs", "tinysrgb");
+  url.searchParams.set("fit", "crop");
+  url.searchParams.set("w", String(IMAGE_WIDTH));
+  url.searchParams.set("h", String(IMAGE_HEIGHT));
+  return url.toString();
+}
 
 /**
  * Photo ids already handed to a product, so two products never share an image.
@@ -854,9 +891,18 @@ async function fetchImages(
     const fresh = (body.photos ?? []).filter((photo) => !usedPhotoIds.has(photo.id));
     if (fresh.length === 0) return [PLACEHOLDER_IMAGE];
 
-    const chosen = fresh.slice(0, 2);
+    // A crop cannot invent pixels: a source smaller than the frame we ask for
+    // comes back upscaled and soft. Photos that can fill 1200x1600 outright go
+    // first, and the rest stay as fallbacks rather than costing us a product
+    // its picture entirely.
+    const ranked = [
+      ...fresh.filter((p) => p.width >= IMAGE_WIDTH && p.height >= IMAGE_HEIGHT),
+      ...fresh.filter((p) => p.width < IMAGE_WIDTH || p.height < IMAGE_HEIGHT),
+    ];
+
+    const chosen = ranked.slice(0, 2);
     for (const photo of chosen) usedPhotoIds.add(photo.id);
-    return chosen.map((photo) => photo.src.large);
+    return chosen.map(highResUrl);
   } catch (error) {
     console.warn(`  Pexels request failed for "${query}":`, error);
     return [PLACEHOLDER_IMAGE];

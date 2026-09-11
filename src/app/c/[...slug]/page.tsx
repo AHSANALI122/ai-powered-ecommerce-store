@@ -110,7 +110,10 @@ export default async function CategoryPage(props: PageProps<"/c/[...slug]">) {
             <li key={crumb.path} className="flex items-center gap-2">
               {index < crumbs.length - 1 ? (
                 <>
-                  <Link href={runtimeRoute(crumb.path)} className="hover:underline">
+                  <Link
+                    href={runtimeRoute(crumb.path)}
+                    className="transition-colors hover:text-[var(--color-ink)]"
+                  >
                     {crumb.name}
                   </Link>
                   <span aria-hidden="true">/</span>
@@ -123,14 +126,16 @@ export default async function CategoryPage(props: PageProps<"/c/[...slug]">) {
         </ol>
       </nav>
 
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{category.name}</h1>
+      <header className="animate-fade-up flex flex-col gap-2 border-b border-[var(--color-line)] pb-6">
+        <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+          {category.name}
+        </h1>
         {category.description ? (
           <p className="max-w-prose text-sm text-[var(--color-muted)]">
             {category.description}
           </p>
         ) : null}
-        <p className="text-sm text-[var(--color-muted)]">
+        <p className="text-xs uppercase tracking-[0.16em] text-[var(--color-muted)]">
           {page.total} {page.total === 1 ? "product" : "products"}
         </p>
         {category.children.length > 0 ? (
@@ -139,7 +144,7 @@ export default async function CategoryPage(props: PageProps<"/c/[...slug]">) {
               <li key={child.id}>
                 <Link
                   href={runtimeRoute(`/c/${category.slug}/${child.slug}`)}
-                  className="rounded-md border border-[var(--color-line)] px-3 py-1.5 text-sm"
+                  className="inline-block rounded-full border border-[var(--color-line)] px-4 py-1.5 text-sm transition-[border-color,transform,box-shadow] duration-200 ease-[var(--ease-interaction)] hover:-translate-y-0.5 hover:border-[var(--color-ink)] hover:shadow-[var(--shadow-card)]"
                 >
                   {child.name}
                 </Link>
@@ -150,7 +155,9 @@ export default async function CategoryPage(props: PageProps<"/c/[...slug]">) {
       </header>
 
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-[16rem_1fr]">
-        <aside>
+        {/* Sticky so the filters stay reachable down a long grid, and its own
+            scroll container so a long facet list cannot push the page. */}
+        <aside className="lg:sticky lg:top-28 lg:max-h-[calc(100dvh-9rem)] lg:overflow-y-auto lg:pr-2">
           <FilterPanel action={category.path} query={query} facets={facets} />
         </aside>
 
@@ -172,7 +179,7 @@ export default async function CategoryPage(props: PageProps<"/c/[...slug]">) {
                     href={runtimeRoute(
                       `${category.path}${buildCatalogSearch(query, { page: 1 })}`,
                     )}
-                    className="underline underline-offset-4"
+                    className="link-sweep"
                   >
                     back to the first page
                   </Link>

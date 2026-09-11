@@ -42,7 +42,7 @@ export function FilterPanel({
             type="search"
             defaultValue={query.q ?? ""}
             maxLength={80}
-            className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2"
+            className="rounded-lg border border-[var(--color-line)] bg-[var(--color-elevated)] px-3 py-2 outline-none transition-[border-color,box-shadow] duration-200 focus:border-[var(--color-ink)] focus:shadow-[var(--shadow-card)]"
           />
         </div>
       ) : query.q ? (
@@ -57,7 +57,7 @@ export function FilterPanel({
           id="filter-sort"
           name="sort"
           defaultValue={query.sort}
-          className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2"
+          className="rounded-lg border border-[var(--color-line)] bg-[var(--color-elevated)] px-3 py-2 outline-none transition-[border-color,box-shadow] duration-200 focus:border-[var(--color-ink)] focus:shadow-[var(--shadow-card)]"
         >
           {showSearchField ? <option value="relevance">Relevance</option> : null}
           <option value="newest">Newest</option>
@@ -74,7 +74,7 @@ export function FilterPanel({
             {facets.sizes.map((size) => (
               <label
                 key={size}
-                className="cursor-pointer rounded-md border border-[var(--color-line)] px-2.5 py-1 text-xs has-checked:border-[var(--color-ink)] has-checked:bg-[var(--color-ink)] has-checked:text-[var(--color-surface)]"
+                className="cursor-pointer rounded-full border border-[var(--color-line)] px-3 py-1.5 text-xs transition-[border-color,background-color,color,transform] duration-200 ease-[var(--ease-interaction)] hover:-translate-y-0.5 hover:border-[var(--color-ink)] has-checked:border-[var(--color-ink)] has-checked:bg-[var(--color-ink)] has-checked:text-[var(--color-surface)]"
               >
                 <input
                   type="checkbox"
