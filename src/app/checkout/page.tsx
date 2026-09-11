@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireVerifiedUser } from "@/lib/auth/current-user";
+import { requireCheckoutUser } from "@/lib/auth/current-user";
 import { getCartView } from "@/server/cart/service";
 import { listAddresses } from "@/server/addresses/service";
 import { activeProvider } from "@/server/payments";
@@ -18,9 +18,12 @@ export const dynamic = "force-dynamic";
 /**
  * Checkout (F3).
  *
- * Gated on a **verified** email address, not merely a session: an order whose
- * buyer cannot be emailed has no way to receive a confirmation or a refund
- * notice, which makes every downstream failure unresolvable. `requireVerifiedUser`
+ * Gated on a session always, and on a **verified** email address by default:
+ * an order whose buyer cannot be emailed has no way to receive a confirmation
+ * or a refund notice, which makes every downstream failure unresolvable.
+ * `REQUIRE_VERIFIED_EMAIL_FOR_CHECKOUT="false"` lifts the second half for a
+ * store whose mail does not yet deliver — there the gate strands the shopper
+ * at a link that never arrives instead of protecting them. Either way this
  * redirects rather than rendering a dead end.
  *
  * The totals rendered here are a quote. They are recomputed from the database
@@ -28,7 +31,7 @@ export const dynamic = "force-dynamic";
  * never one that passed through the browser (SEC-4, SEC-11).
  */
 export default async function CheckoutPage() {
-  const user = await requireVerifiedUser();
+  const user = await requireCheckoutUser();
 
   const [cart, addresses] = await Promise.all([
     getCartView({ kind: "user", userId: user.id }),

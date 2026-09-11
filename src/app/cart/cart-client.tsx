@@ -33,11 +33,17 @@ const ISSUE_LABEL: Record<NonNullable<Line["issue"]>, string> = {
 export function CartClient({
   initialCart,
   isSignedIn,
-  isVerified,
+  canCheckOut,
 }: {
   initialCart: Cart;
   isSignedIn: boolean;
-  isVerified: boolean;
+  /**
+   * Decided on the server, because whether an unverified address may buy is
+   * policy the checkout page and the checkout POST also enforce. Passing the
+   * raw `emailVerified` here would leave this button free to disagree with
+   * them.
+   */
+  canCheckOut: boolean;
 }) {
   const [cart, setCart] = useState<Cart>(initialCart);
   const [error, setError] = useState<string | null>(null);
@@ -246,7 +252,7 @@ export function CartClient({
           >
             Sign in to check out
           </Link>
-        ) : !isVerified ? (
+        ) : !canCheckOut ? (
           <div className="flex flex-col gap-2">
             <p className="text-sm text-[var(--color-muted)]">
               Confirm your email address to check out.

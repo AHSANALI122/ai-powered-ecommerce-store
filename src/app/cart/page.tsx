@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { readCartOwner } from "@/server/cart/owner";
 import { getCartView } from "@/server/cart/service";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { canCheckOut, getCurrentUser } from "@/lib/auth/current-user";
 import { CartClient } from "./cart-client";
 
 /** A cart is one person's, and changes constantly. Never indexed (spec §7). */
@@ -40,7 +40,9 @@ export default async function CartPage() {
       <CartClient
         initialCart={cart}
         isSignedIn={Boolean(user)}
-        isVerified={Boolean(user?.emailVerified)}
+        // The same question the checkout page and the checkout POST ask, so a
+        // shopper is never shown a button that refuses them on the next screen.
+        canCheckOut={canCheckOut(user)}
       />
     </div>
   );

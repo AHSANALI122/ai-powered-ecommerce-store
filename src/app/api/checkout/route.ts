@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jsonError, jsonOk, parseBody } from "@/lib/http";
 import { requireCsrf } from "@/lib/csrf";
-import { requireApiVerifiedUser } from "@/lib/auth/api-guard";
+import { requireApiCheckoutUser } from "@/lib/auth/api-guard";
 import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { checkoutSchema, idempotencyKeySchema } from "@/lib/validation/checkout";
 import { readCartOwner } from "@/server/cart/owner";
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const csrf = requireCsrf(request);
   if (csrf) return csrf;
 
-  const guard = await requireApiVerifiedUser();
+  const guard = await requireApiCheckoutUser();
   if (!guard.ok) return guard.response;
 
   // Keyed by user, not IP: the limit exists to bound order-creation abuse from

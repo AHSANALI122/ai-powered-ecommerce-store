@@ -140,6 +140,30 @@ const serverSchema = z.object({
     .optional()
     .transform((value) => (value === undefined ? undefined : value === "true")),
 
+  /**
+   * Whether checkout is gated on a verified email address.
+   *
+   * Default `true`, which is F1's DoD: an order whose buyer cannot be emailed
+   * has no route to a confirmation or a refund notice. Setting it `false`
+   * trades that for the ability to sell before email works at all — which is
+   * the honest state of a store with no verified sending domain, where the
+   * gate does not protect the buyer, it just strands them at a verification
+   * link that never arrives.
+   *
+   * Unlike `EMAIL_DRIVER="log"` or `PAYMENT_PROVIDER="fake"`, boot allows this
+   * in production. Those pretend to work; this one plainly does less, and
+   * "no email confirmation required to buy" is a policy most stores actually
+   * run. It is announced at boot rather than refused.
+   *
+   * It governs checkout only. Review submission stays gated either way — that
+   * gate is anti-spam, not contactability, and nothing about a missing domain
+   * makes unverified reviews a good idea.
+   */
+  REQUIRE_VERIFIED_EMAIL_FOR_CHECKOUT: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+
   PEXELS_API_KEY: z.string().min(1).optional(),
 
   APP_URL: z.url().default("http://localhost:3000"),
@@ -274,6 +298,16 @@ function loadServerEnv(): ServerEnv {
     if (parsed.data.EMAIL_DRIVER === "resend" && !parsed.data.RESEND_API_KEY) {
       throw new Error('EMAIL_DRIVER="resend" is missing: RESEND_API_KEY');
     }
+    // Allowed, but never silently. This one is a deliberate policy choice and
+    // the kind that outlives the reason for it — the line is here so an
+    // operator reading boot logs six months from now finds out it is still on.
+    if (!parsed.data.REQUIRE_VERIFIED_EMAIL_FOR_CHECKOUT) {
+      console.warn(
+        '[env] REQUIRE_VERIFIED_EMAIL_FOR_CHECKOUT="false": shoppers can order ' +
+          "with an unconfirmed email address. Turn it back on once mail delivers.",
+      );
+    }
+
     if (parsed.data.EMAIL_DRIVER === "smtp") {
       // Named individually rather than as one "SMTP is misconfigured": the
       // whole point of failing at boot is that the operator knows which value

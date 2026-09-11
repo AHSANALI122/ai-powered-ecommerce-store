@@ -1,7 +1,11 @@
 import type { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { jsonError } from "@/lib/http";
-import { getSessionClaims, type CurrentUser } from "@/lib/auth/current-user";
+import {
+  checkoutRequiresVerifiedEmail,
+  getSessionClaims,
+  type CurrentUser,
+} from "@/lib/auth/current-user";
 import type { Role } from "@/generated/prisma/enums";
 
 /**
@@ -35,7 +39,7 @@ export async function requireApiUser(): Promise<Guard<CurrentUser>> {
   return { ok: true, user };
 }
 
-/** Checkout and review submission require a verified address (F1 DoD). */
+/** Review submission requires a verified address (F1 DoD). */
 export async function requireApiVerifiedUser(): Promise<Guard<CurrentUser>> {
   const guard = await requireApiUser();
   if (!guard.ok) return guard;
@@ -46,6 +50,17 @@ export async function requireApiVerifiedUser(): Promise<Guard<CurrentUser>> {
     };
   }
   return guard;
+}
+
+/**
+ * Checkout's route-handler guard. The session is still required — an order
+ * needs an owner — but whether an unverified address may buy is policy, read
+ * from the same place the page guard and the cart button read it, so the
+ * button, the page and the POST can never disagree.
+ */
+export async function requireApiCheckoutUser(): Promise<Guard<CurrentUser>> {
+  if (checkoutRequiresVerifiedEmail()) return requireApiVerifiedUser();
+  return requireApiUser();
 }
 
 /**

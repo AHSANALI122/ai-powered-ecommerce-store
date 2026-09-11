@@ -2,6 +2,7 @@ import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { serverEnv } from "@/lib/env";
 import { ACCESS_COOKIE } from "@/lib/auth/cookies";
 import { verifyAccessToken, type AccessClaims } from "@/lib/auth/tokens";
 import type { Role } from "@/generated/prisma/enums";
@@ -62,10 +63,40 @@ export async function requireUser(): Promise<CurrentUser> {
   return user;
 }
 
-/** Checkout and review submission are gated on a verified address (F1 DoD). */
+/** Review submission is gated on a verified address (F1 DoD). */
 export async function requireVerifiedUser(): Promise<CurrentUser> {
   const user = await requireUser();
   if (!user.emailVerified) {
+    redirect("/verify-email?required=1");
+  }
+  return user;
+}
+
+/**
+ * Whether an unverified shopper may reach checkout.
+ *
+ * One question asked in four places — the checkout page, the two checkout
+ * route handlers, and the cart's checkout button — because a gate enforced on
+ * three of them and not the fourth is either a dead end a shopper cannot see
+ * coming or a button that 403s after they press it.
+ */
+export function checkoutRequiresVerifiedEmail(): boolean {
+  return serverEnv().REQUIRE_VERIFIED_EMAIL_FOR_CHECKOUT;
+}
+
+/** True when this user may check out under the current policy. */
+export function canCheckOut(user: Pick<CurrentUser, "emailVerified"> | null): boolean {
+  if (!user) return false;
+  return !checkoutRequiresVerifiedEmail() || user.emailVerified !== null;
+}
+
+/**
+ * Checkout's page guard. Still requires a session — the order needs an owner
+ * (SEC-23) — but the verification half is policy, not structure.
+ */
+export async function requireCheckoutUser(): Promise<CurrentUser> {
+  const user = await requireUser();
+  if (checkoutRequiresVerifiedEmail() && !user.emailVerified) {
     redirect("/verify-email?required=1");
   }
   return user;
