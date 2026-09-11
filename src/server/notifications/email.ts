@@ -13,6 +13,16 @@ import type { RenderedEmail } from "@/server/notifications/render";
  * that matters here — distinguishing "retry this" from "never retry this" —
  * is a decision about HTTP status codes that we have to make ourselves either
  * way.
+ *
+ * Three drivers, and which one you can use is decided by whether you own a
+ * domain:
+ *
+ * - `resend` wants a domain verified by DNS record. Best deliverability, and
+ *   the eventual answer for a real store.
+ * - `smtp` (see `./smtp.ts`) needs no domain at all — it borrows one from a
+ *   relay you already have a mailbox at, typically Gmail with an App
+ *   Password. Lower volume, but it reaches real customers.
+ * - `log` reaches nobody and is refused in production.
  */
 
 export type SendOutcome =
@@ -113,9 +123,29 @@ class LogSender implements EmailSender {
 
 let cached: EmailSender | undefined;
 
-export function getEmailSender(): EmailSender {
+export async function getEmailSender(): Promise<EmailSender> {
   if (cached) return cached;
   const env = serverEnv();
+
+  if (env.EMAIL_DRIVER === "smtp") {
+    if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
+      // Unreachable in production, where env.ts requires all three at boot.
+      console.warn("[notifications] EMAIL_DRIVER=smtp is incomplete; logging instead.");
+      cached = new LogSender();
+      return cached;
+    }
+    const { SmtpSender } = await import("@/server/notifications/smtp");
+    cached = new SmtpSender({
+      host: env.SMTP_HOST,
+      port: env.SMTP_PORT,
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+      // Implicit TLS on 465, STARTTLS everywhere else, unless stated.
+      secure: env.SMTP_SECURE ?? env.SMTP_PORT === 465,
+      from: env.EMAIL_FROM,
+    });
+    return cached;
+  }
 
   if (env.EMAIL_DRIVER === "resend") {
     if (!env.RESEND_API_KEY) {

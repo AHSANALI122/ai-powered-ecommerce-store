@@ -96,7 +96,7 @@ export async function processOutbox(limit = BATCH_SIZE): Promise<WorkerSummary> 
 
   if (due.length === 0) return summary;
 
-  const sender = getEmailSender();
+  const sender = await getEmailSender();
 
   for (const candidate of due) {
     const leaseUntil = new Date(Date.now() + LEASE_MS);

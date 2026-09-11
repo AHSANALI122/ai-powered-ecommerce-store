@@ -105,10 +105,40 @@ const serverSchema = z.object({
    * stdout instead of sending them fails silently until a customer is locked
    * out.
    */
-  EMAIL_DRIVER: z.enum(["log", "resend"]).default("log"),
+  EMAIL_DRIVER: z.enum(["log", "resend", "smtp"]).default("log"),
   RESEND_API_KEY: z.string().min(1).optional(),
-  /** Envelope sender. Must be an address on a domain verified with Resend. */
+  /**
+   * Envelope sender.
+   *
+   * Under `resend` this must be an address on a domain verified with Resend —
+   * the shared `onboarding@resend.dev` sender only delivers to the address
+   * that owns the Resend account, so it is a testing sender, not a launch one.
+   * Under `smtp` it must be the mailbox the SMTP account is allowed to send
+   * as, which for Gmail means `SMTP_USER` itself; a mismatch is rewritten by
+   * the relay at best and rejected at worst.
+   */
   EMAIL_FROM: z.string().min(3).default("orders@example.com"),
+
+  /**
+   * SMTP relay (`EMAIL_DRIVER="smtp"`). The no-domain path: an ordinary
+   * mailbox at a provider that already owns a verified domain sends on your
+   * behalf, so there is no DNS to set up. Gmail with an App Password is the
+   * usual case (smtp.gmail.com:465, ~500 messages/day).
+   */
+  SMTP_HOST: z.string().min(1).optional(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(465),
+  SMTP_USER: z.string().min(1).optional(),
+  SMTP_PASS: z.string().min(1).optional(),
+  /**
+   * Implicit TLS from the first byte (port 465) versus STARTTLS upgrade
+   * (587). Defaulted from the port rather than asked for, because the two are
+   * not independent and a mismatch hangs the connection until it times out
+   * instead of erroring.
+   */
+  SMTP_SECURE: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value === "true")),
 
   PEXELS_API_KEY: z.string().min(1).optional(),
 
@@ -238,11 +268,28 @@ function loadServerEnv(): ServerEnv {
     // possible failure, because the outbox would look healthy.
     if (parsed.data.EMAIL_DRIVER === "log") {
       throw new Error(
-        'EMAIL_DRIVER="log" cannot be used in production: it discards mail and reports success. Set EMAIL_DRIVER="resend".',
+        'EMAIL_DRIVER="log" cannot be used in production: it discards mail and reports success. Set EMAIL_DRIVER="resend" or EMAIL_DRIVER="smtp".',
       );
     }
     if (parsed.data.EMAIL_DRIVER === "resend" && !parsed.data.RESEND_API_KEY) {
       throw new Error('EMAIL_DRIVER="resend" is missing: RESEND_API_KEY');
+    }
+    if (parsed.data.EMAIL_DRIVER === "smtp") {
+      // Named individually rather than as one "SMTP is misconfigured": the
+      // whole point of failing at boot is that the operator knows which value
+      // to go and set.
+      const missing = (
+        [
+          ["SMTP_HOST", parsed.data.SMTP_HOST],
+          ["SMTP_USER", parsed.data.SMTP_USER],
+          ["SMTP_PASS", parsed.data.SMTP_PASS],
+        ] as const
+      )
+        .filter(([, value]) => !value)
+        .map(([name]) => name);
+      if (missing.length > 0) {
+        throw new Error(`EMAIL_DRIVER="smtp" is missing: ${missing.join(", ")}`);
+      }
     }
 
     // The assistant is optional, but a *enabled* assistant in production must

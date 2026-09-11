@@ -43,10 +43,30 @@ no self-service path to one, by design. Promote an account by hand:
 npx tsx --env-file=.env -e 'const {prisma}=await import("./src/lib/db.ts"); await prisma.user.update({where:{email:"you@example.com"},data:{role:"ADMIN"}}); process.exit(0)'
 ```
 
-Transactional email needs `EMAIL_DRIVER="resend"` plus `RESEND_API_KEY` and an
-`EMAIL_FROM` on a domain verified with Resend. Development defaults to
-`EMAIL_DRIVER="log"`, which prints each message and reports success so the whole
-outbox lifecycle works with no provider; `env.ts` refuses it in production.
+Transactional email has three drivers, and which are usable is decided by
+whether a domain is owned:
+
+- **`resend`** — `RESEND_API_KEY` plus an `EMAIL_FROM` on a domain verified
+  with Resend. Best deliverability, and the eventual answer for a real store.
+  The shared `onboarding@resend.dev` sender needs no domain but **only delivers
+  to the address that owns the Resend account**; every other recipient is a 403,
+  which the worker correctly classifies as permanent and marks FAILED. It is a
+  way to preview a rendered email, not a way to serve customers.
+- **`smtp`** — `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` (`SMTP_PORT` defaults to
+  465, `SMTP_SECURE` defaults from the port). The no-domain path: a relay that
+  already owns a verified domain sends on your behalf, typically Gmail with an
+  App Password, so there is no DNS to publish. `EMAIL_FROM` must equal
+  `SMTP_USER` — Gmail rewrites the envelope sender to the authenticated
+  mailbox. ~500/day and weaker deliverability than a verified domain.
+- **`log`** — development default. Prints each message and reports success, so
+  the whole outbox lifecycle works with no provider; `env.ts` refuses it in
+  production.
+
+`npm run mail:test -- you@example.com` sends one message through whichever
+driver is selected, **bypassing the outbox**. That is the point: "no email
+arrived" is always either the provider rejecting it or nothing draining the
+queue, and those have unrelated fixes. This isolates the first half and prints
+the provider's verbatim refusal instead of the truncated `lastError`.
 
 The outbox is drained by `/api/cron/send-notifications` (Bearer `CRON_SECRET`,
 every two minutes in `vercel.json`). **Nothing sends without that job running**,
@@ -58,6 +78,7 @@ Locally, drain it with the script instead:
 npm run mail:send                # drain once
 npm run mail:watch               # poll every 5s, run alongside `next dev`
 npm run mail:send -- --replay    # requeue FAILED rows first, then drain
+npm run mail:test -- you@example.com   # one message, bypassing the outbox
 ```
 
 `scripts/drain-outbox.ts` calls `processOutbox` directly, so it needs no running
@@ -109,7 +130,7 @@ src/server/pricing/           buildQuote + computeTotals (pure), tax-rate settin
 src/server/addresses/         owner-scoped address CRUD
 src/server/orders/            checkout, capture, webhook pipeline, order number, snapshots
 src/server/payments/          PaymentProvider interface + easypaisa / stripe / fake
-src/server/notifications/     outbox: queue writer, worker (lease + backoff), templates, Resend driver
+src/server/notifications/     outbox: queue writer, worker (lease + backoff), templates, Resend + SMTP drivers
 src/server/admin/             F4 services: products, categories, orders, reviews, shipping, settings, audit
 src/server/uploads/           ImageStore drivers + magic-byte type detection
 src/server/assistant/         F5: tools (the security boundary), prompt, agent, sanitize, telemetry
@@ -165,10 +186,12 @@ From the ADRs (§4) — the ones a locally-sensible change is most likely to bre
 
 Customer-scoped tool user, not an operator. Retrieved catalog and review text is **data, not instructions** — and the enforcement lives in the tools, not the prompt. Every rule below is structural: it holds whatever the model is talked into saying.
 
-- **`src/server/assistant/tools.ts` is the whole security boundary.** Five tools, four read-only, one write. No tool schema has a price, a discount, a user id, an order id or a role field, so those are not requests the model is *able* to make (SEC-2, SEC-3, SEC-4). `tools.test.ts` enumerates the surface — adding a tool fails it on purpose.
+- **`src/server/assistant/tools.ts` is the whole security boundary.** Eight tools: five read-only (`searchProducts`, `recommendByInterest`, `getProductDetails`, `filterByBudget`, `viewCart`) and three cart writes (`addToCart`, `removeFromCart`, `updateCartQuantity`). No tool schema has a price, a discount, a user id, an order id or a role field, so those are not requests the model is _able_ to make (SEC-2, SEC-3, SEC-4). `tools.test.ts` enumerates the surface — adding a tool fails it on purpose.
 - **Identity comes from a closure, not an argument.** `buildAssistantTools(userId)` is built per request from the session the route read; `addToCart` closes over it. Nothing travelling alongside the model's arguments can name a user.
-- **`addToCart` is the only write, and it cannot pay.** There is no checkout, order, refund or stock tool to reach. "Refuses to check out" is a missing capability, not a promise in the prompt.
+- **Every write is a cart write, and none of them can pay.** There is no checkout, order, refund or stock tool to reach. "Refuses to check out" is a missing capability, not a promise in the prompt.
+- **The cart writes address a line by `variantId`, one line per call.** There is no `clearCart`, no bulk remove and no cart-item id anywhere in a tool schema — the cart is the one from the closure, and the worst a successful injection achieves is one named line a shopper can put straight back from `/cart`. `removeItemByVariant`/`setItemQuantityByVariant` in `src/server/cart/service.ts` keep the owner filter in the `where` (SEC-23), so a variantId from someone else's cart matches nothing.
 - **Nothing returns a Prisma row.** Every result is a hand-built object with named, sanitized fields — no `isActive`, no `source` (which would out the seed data), no ids beyond `variantId`, which the product page already exposes. Failures return `{ ok: false, message }`; throwing would put a stack trace in the model's context (SEC-26).
+- **Product image URLs go to the browser, not to the model.** `image` is on the tool result the panel renders and is stripped by each read tool's `toModelOutput`, so there is no URL in the model's context for it to echo into an answer. Which products get a picture is decided by the `/p/<slug>` links the answer itself contains (`components/assistant/suggestions.ts`); the content of each card comes only from the tool result, so an invented slug renders nothing.
 - **Read tools force `inStock: 1` and go through `catalogQuerySchema`**, so the page cap and sort whitelist apply to the model exactly as to a shopper editing a URL (SEC-24). The model has no sort input at all.
 - **Untrusted text is neutralized then fenced** by `sanitize.ts`: Unicode `Cc`/`Cf`/`Zl`/`Zp` stripped (the zero-width and bidi tricks), chat-template and fence lookalikes removed, length capped, then wrapped in `<untrusted>…</untrusted>`. The fence is a hint to the model; the tools are the control.
 - **The renderer has its own allowlist.** `components/assistant/link-policy.ts` only makes `[label](/p|/c|/search|/cart…)` clickable. A model argued into emitting `[Pay now](https://evil.example)` renders that as characters.
@@ -184,7 +207,7 @@ Customer-scoped tool user, not an operator. Retrieved catalog and review text is
 - **`verifiedPurchase` is derived, never accepted.** From the caller's own orders with `paymentStatus: PAID` **and** `status ∈ {PROCESSING, SHIPPED, DELIVERED}` — a REFUNDED or CANCELLED order fails on status though it once had `paidAt`. It is recomputed on edit, not copied forward.
 - **An edited review returns to PENDING.** Otherwise approving a review is approving whatever text replaces it later.
 - **`recomputeProductRating` has exactly one implementation** (`src/server/admin/reviews.ts`) and is always called inside the transaction that changed what is APPROVED. It recomputes from a fresh aggregate rather than nudging the old value by a delta — an incremental update is correct only if every prior one was.
-- **The outbox worker claims with a lease, not a status.** `NotificationStatus` has no SENDING state and the schema is fixed, so the claim is a conditional `updateMany` that re-asserts QUEUED and pushes `nextAttemptAt` past the send timeout. Two overlapping cron runs divide the batch; a crashed worker's row becomes due again. `attempts` increments at *claim* time so a poison row cannot occupy the worker forever.
+- **The outbox worker claims with a lease, not a status.** `NotificationStatus` has no SENDING state and the schema is fixed, so the claim is a conditional `updateMany` that re-asserts QUEUED and pushes `nextAttemptAt` past the send timeout. Two overlapping cron runs divide the batch; a crashed worker's row becomes due again. `attempts` increments at _claim_ time so a poison row cannot occupy the worker forever.
 - **A permanent rejection is not retried.** The `EmailSender` outcome carries `retryable`: 429 and 5xx go back in the queue, other 4xx go straight to FAILED. Retrying a 422 for a malformed address five times only delays the moment somebody notices.
 - **Templates escape everything they interpolate and only emit same-origin links.** A display name is user-chosen text and a webmail client is a browser (`render.ts`).
 - **The wishlist is signed-in only** and has no guest path, unlike the cart. Move-to-cart re-resolves the variant with `productId` in the same `where`, so a variant id from another product matches nothing.
