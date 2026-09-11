@@ -4,6 +4,7 @@ import { Inter, Playfair_Display } from "next/font/google";
 import { publicEnv } from "@/lib/env";
 import { SessionLoader } from "@/components/auth/session-loader";
 import { AccountNav } from "@/components/site/account-nav";
+import { DemoBanner } from "@/components/site/demo-banner";
 import { CategoryNav, SearchForm } from "@/components/site/category-nav";
 import { CartLink } from "@/components/cart/cart-link";
 import { WebSiteJsonLd } from "@/components/seo/json-ld";
@@ -60,6 +61,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${playfair.variable}`}>
       <body className="min-h-full antialiased">
+        <DemoBanner />
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-[var(--color-ink)] focus:px-4 focus:py-2 focus:text-[var(--color-surface)]"

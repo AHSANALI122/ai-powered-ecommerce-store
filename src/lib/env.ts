@@ -164,6 +164,31 @@ const serverSchema = z.object({
     .default("true")
     .transform((value) => value === "true"),
 
+  /**
+   * This deployment is a demonstration and takes no real money.
+   *
+   * One switch rather than several, because the guards it opens all rest on a
+   * single claim — that nobody here is a real customer — and splitting it into
+   * per-guard overrides would let that claim be true of payments and false of
+   * the assistant, which is not a coherent state for a deployment to be in.
+   *
+   * It opens exactly two doors, both otherwise refused in production:
+   *   - `PAYMENT_PROVIDER="fake"`, so a store with no merchant account can
+   *     still show a whole checkout.
+   *   - `AI_TIER="free"`, whose prompts may be used for training (SEC-13).
+   *
+   * It opens nothing else. `EMAIL_DRIVER="log"` and `IMAGE_STORE="local"` stay
+   * refused, because those two do not fail honestly — they report success and
+   * lose the data — and a demo that silently drops mail is just broken.
+   *
+   * Every page renders a banner while this is on, so the claim is made to
+   * visitors rather than only to a boot log nobody reads.
+   */
+  DEMO_MODE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+
   PEXELS_API_KEY: z.string().min(1).optional(),
 
   APP_URL: z.url().default("http://localhost:3000"),
@@ -263,8 +288,22 @@ function loadServerEnv(): ServerEnv {
     // (AD-8). The fake provider marks orders paid on an unsigned local request,
     // so it is a development affordance and never a production one.
     if (parsed.data.PAYMENT_PROVIDER === "fake") {
-      throw new Error(
-        'PAYMENT_PROVIDER="fake" cannot be used in production: it accepts unverified payments.',
+      if (!parsed.data.DEMO_MODE) {
+        throw new Error(
+          'PAYMENT_PROVIDER="fake" cannot be used in production: it accepts unverified payments. ' +
+            'Set DEMO_MODE="true" only if this deployment is a demo that takes no real money.',
+        );
+      }
+      // The escape hatch exists because a portfolio deployment has no merchant
+      // account and never will. It is a separate variable rather than a wider
+      // `PAYMENT_PROVIDER` enum so that nobody reaches it by accident: turning
+      // it on is a sentence about what the deployment *is*, not a tweak to how
+      // payments are configured. `DEMO_MODE` also drives a banner on every
+      // page, so the claim is made to visitors and not only to this log line.
+      console.warn(
+        '[env] DEMO_MODE="true" with PAYMENT_PROVIDER="fake": orders are marked ' +
+          "PAID by a locally signed sandbox postback. This deployment must never " +
+          "be presented as a store that takes real payments.",
       );
     }
     const providerMissing = missingProviderCredentials(parsed.data);
@@ -329,9 +368,21 @@ function loadServerEnv(): ServerEnv {
     // The assistant is optional, but a *enabled* assistant in production must
     // be on a tier that does not train on what shoppers type into it (SEC-13).
     if (parsed.data.AI_ASSISTANT_ENABLED) {
-      if (parsed.data.AI_TIER === "free") {
+      if (parsed.data.AI_TIER === "free" && !parsed.data.DEMO_MODE) {
         throw new Error(
-          'AI_TIER="free" cannot be used in production: the free Gemini tier may train on prompts (SEC-13). Set AI_TIER="paid" or AI_ASSISTANT_ENABLED="false".',
+          'AI_TIER="free" cannot be used in production: the free Gemini tier may train on prompts (SEC-13). Set AI_TIER="paid", or AI_ASSISTANT_ENABLED="false", or DEMO_MODE="true" if no real shopper will ever type into it.',
+        );
+      }
+      if (parsed.data.AI_TIER === "free") {
+        // SEC-13 held open deliberately, and the reason it is the same switch
+        // as the payment one is that they are the same claim: nothing a person
+        // types here is a real customer's data. An assistant is the most
+        // PII-dense surface in an ecommerce app — it sees what someone is
+        // shopping for in their own words — so the moment this deployment has
+        // real shoppers, this is the first flag to turn off.
+        console.warn(
+          '[env] DEMO_MODE="true" with AI_TIER="free": prompts may be used to ' +
+            'train the model. Move to AI_TIER="paid" before real shoppers use this.',
         );
       }
       if (!parsed.data.GOOGLE_GENERATIVE_AI_API_KEY) {
