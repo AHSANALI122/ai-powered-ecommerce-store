@@ -75,8 +75,13 @@ export default function RootLayout({
         />
 
         {/* Facts, not marketing: PKR is the single base currency (spec §4) and
-            worldwide shipping is what this store is. */}
-        <div className="border-b border-[var(--color-line)] bg-[var(--color-ink)] text-[var(--color-surface)]">
+            worldwide shipping is what this store is.
+
+            Hidden below `sm`. The line wraps to two rows under ~375px and sits
+            directly above a sticky header, so it costs about 50px of a phone
+            screen to repeat something no shopper is deciding on right now —
+            and the currency half of it is on every price on the page anyway. */}
+        <div className="hidden border-b border-[var(--color-line)] bg-[var(--color-ink)] text-[var(--color-surface)] sm:block">
           <p className="mx-auto max-w-6xl px-4 py-2 text-center text-[10px] uppercase tracking-[0.12em] sm:px-6 sm:text-[11px] sm:tracking-[0.18em]">
             Worldwide shipping · Prices in PKR · Real-time stock
           </p>

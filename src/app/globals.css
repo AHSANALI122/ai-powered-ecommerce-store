@@ -49,8 +49,17 @@
   color-scheme: light dark;
 }
 
-html,
-body {
+/**
+ * `height` on `html` only — never on `body`.
+ *
+ * A `position: sticky` element sticks within its containing block, which for
+ * the header is `body`. With `height: 100%` body's box is exactly one viewport
+ * tall however long the page is, so the header stuck for the first screenful
+ * and then scrolled away with everything else — on a 390px phone, at about
+ * 595px of scroll. `body` carries `min-h-full` as a class, which is what the
+ * full-height intent actually wanted: a floor, not a ceiling.
+ */
+html {
   height: 100%;
 }
 
