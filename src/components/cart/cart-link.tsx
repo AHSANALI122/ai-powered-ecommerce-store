@@ -63,7 +63,11 @@ export function CartLink() {
   return (
     <Link
       href="/cart"
-      className="group flex items-center gap-2 text-sm transition-opacity hover:opacity-70"
+      // Below `sm` the label is hidden and the icon is 20px, which is a 20px
+      // tap target sitting next to a 36px search icon. The square gives it the
+      // same hit area as its neighbour without changing how it looks; from
+      // `sm` up the label is back and the box sizes to its content.
+      className="group flex size-9 items-center justify-center gap-2 text-sm transition-opacity hover:opacity-70 sm:size-auto sm:justify-start"
     >
       <span className="relative inline-flex">
         <svg

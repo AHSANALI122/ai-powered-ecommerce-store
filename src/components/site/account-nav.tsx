@@ -18,7 +18,7 @@ export function AccountNav() {
 
   if (status === "unknown") {
     return (
-      <Link href="/account" className="link-sweep text-sm">
+      <Link href="/account" className="link-sweep -my-2 py-2 text-sm sm:my-0 sm:py-0">
         Account
       </Link>
     );
@@ -30,7 +30,10 @@ export function AccountNav() {
     // a phone.
     return (
       <div className="flex items-center gap-3 text-sm sm:gap-4">
-        <Link href="/login" className="link-sweep whitespace-nowrap">
+        <Link
+          href="/login"
+          className="link-sweep -my-2 whitespace-nowrap py-2 sm:my-0 sm:py-0"
+        >
           Sign in
         </Link>
         <Link
@@ -58,7 +61,10 @@ export function AccountNav() {
           {user.role.toLowerCase()}
         </span>
       ) : null}
-      <Link href="/account" className="link-sweep max-w-20 truncate sm:max-w-28">
+      <Link
+        href="/account"
+        className="link-sweep -my-2 max-w-20 truncate py-2 sm:my-0 sm:max-w-28 sm:py-0"
+      >
         {user.name ?? "Account"}
       </Link>
       <span className="hidden sm:inline">
