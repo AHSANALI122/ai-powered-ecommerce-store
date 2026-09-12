@@ -223,7 +223,7 @@ export function CheckoutClient({
             <button
               type="button"
               onClick={() => setShowForm(true)}
-              className="self-start text-sm underline underline-offset-4"
+              className="-my-2 self-start py-2 text-sm underline underline-offset-4 sm:my-0 sm:py-0"
             >
               Add a different address
             </button>
@@ -244,14 +244,19 @@ export function CheckoutClient({
             <ul className="flex flex-col gap-2">
               {quote.options.map((option) => (
                 <li key={option.id}>
-                  <label className="flex cursor-pointer flex-wrap items-center gap-3 rounded-lg border border-[var(--color-line)] p-4 text-sm has-checked:border-[var(--color-ink)] has-checked:ring-1 has-checked:ring-[var(--color-ink)]">
+                  {/* `items-start`, not `items-center`: the meta line wraps to
+                      two or three rows on a phone, and centring puts the price
+                      level with the middle of that block — measured 40px below
+                      its own option name at 320px. Aligned to the top it reads
+                      as the price *of* the name beside it. */}
+                  <label className="flex cursor-pointer flex-wrap items-start gap-3 rounded-lg border border-[var(--color-line)] p-4 text-sm has-checked:border-[var(--color-ink)] has-checked:ring-1 has-checked:ring-[var(--color-ink)]">
                     <input
                       type="radio"
                       name="shippingRate"
                       value={option.id}
                       checked={shippingRateId === option.id}
                       onChange={() => chooseRate(option.id)}
-                      className="size-4"
+                      className="mt-0.5 size-4 shrink-0"
                     />
                     <span className="flex-1">
                       <span className="block font-medium">{option.name}</span>
@@ -262,7 +267,7 @@ export function CheckoutClient({
                           : ""}
                       </span>
                     </span>
-                    <span className="tabular-nums">
+                    <span className="shrink-0 tabular-nums whitespace-nowrap">
                       {formatMoney(option.price, quote.currency)}
                     </span>
                   </label>
@@ -282,7 +287,10 @@ export function CheckoutClient({
               <span className="text-[var(--color-muted)]">
                 {line.productTitle} · {line.colorName} {line.size} × {line.quantity}
               </span>
-              <span className="tabular-nums">
+              {/* Both spans shrink by default, so a long product title can
+                  squeeze the amount until it wraps mid-number. An amount is the
+                  one thing on this page that must stay readable at a glance. */}
+              <span className="shrink-0 tabular-nums whitespace-nowrap">
                 {formatMoney(line.lineTotal, cart.currency)}
               </span>
             </li>
@@ -303,7 +311,7 @@ export function CheckoutClient({
           />
           <div className="flex justify-between border-t border-[var(--color-line)] pt-2 text-base font-medium">
             <dt>Total</dt>
-            <dd className="tabular-nums">
+            <dd className="shrink-0 tabular-nums whitespace-nowrap">
               {quote ? formatMoney(quote.grandTotal, quote.currency) : "—"}
             </dd>
           </div>
@@ -346,7 +354,9 @@ function Row({
   return (
     <div className="flex justify-between">
       <dt className="text-[var(--color-muted)]">{label}</dt>
-      <dd className="tabular-nums">{value ? formatMoney(value, currency) : "—"}</dd>
+      <dd className="shrink-0 tabular-nums whitespace-nowrap">
+        {value ? formatMoney(value, currency) : "—"}
+      </dd>
     </div>
   );
 }
