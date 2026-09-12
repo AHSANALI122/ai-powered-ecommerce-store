@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import useEmblaCarousel from "embla-carousel-react";
@@ -17,8 +17,10 @@ import { runtimeRoute } from "@/lib/routes";
  *    never fighting a moving target.
  *  - **No autoplay at all under `prefers-reduced-motion: reduce`.** The plugin
  *    is not even created, rather than created and stopped — a plugin that is
- *    running and paused is one bug away from moving. The progress bar is not
- *    rendered either: a countdown to something that will never happen.
+ *    running and paused is one bug away from moving. The countdown bar inside
+ *    the active dot stops with it, but through CSS rather than through this
+ *    component: see `.dot-sweep` in `globals.css` for why the preference must
+ *    not reach the markup.
  *  - **Keyboard navigable** with arrow keys, real buttons, and visible focus.
  *  - **ARIA**: `aria-roledescription="carousel"`, labelled slides, and a
  *    polite live region announcing the current slide.
@@ -196,23 +198,27 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
               aria-current={index === selected}
               className="group relative h-1.5 overflow-hidden rounded-full bg-[var(--color-line)] transition-[width] duration-500 ease-[var(--ease-entrance)] aria-[current=true]:w-14 aria-[current=false]:w-6 hover:bg-[var(--color-muted)]"
             >
-              {/* The autoplay countdown, drawn inside the active dot. Keyed on
-                  the slide so it restarts with each rotation, and absent
-                  entirely when nothing is rotating. */}
-              {index === selected && !reducedMotion ? (
+              {/* The autoplay countdown, drawn inside the active dot. Keyed
+                  on the slide so it restarts with each rotation.
+
+                  `reducedMotion` deliberately does not reach this markup. It
+                  is `false` during SSR and the real value on the client's
+                  first render, so a tree that branches on it hydrates
+                  mismatched — and React does not patch a mismatched
+                  attribute, which left the server's inline `animation` live on
+                  the element for exactly the reader who asked for none. So the
+                  sweep is a class and `globals.css` decides; under `reduce`
+                  the span is a filled bar, which is what the branch this
+                  replaced drew by hand.
+
+                  `--sweep-ms` is the same constant the autoplay plugin gets,
+                  and it is identical on both sides of hydration. */}
+              {index === selected ? (
                 <span
                   key={`progress-${selected}`}
                   aria-hidden="true"
-                  className="absolute inset-0 origin-left bg-[var(--color-ink)]"
-                  style={{
-                    animation: `progress-sweep ${AUTOPLAY_DELAY_MS}ms linear both`,
-                  }}
-                />
-              ) : null}
-              {index === selected && reducedMotion ? (
-                <span
-                  aria-hidden="true"
-                  className="absolute inset-0 bg-[var(--color-ink)]"
+                  className="dot-sweep absolute inset-0 origin-left bg-[var(--color-ink)]"
+                  style={{ "--sweep-ms": `${AUTOPLAY_DELAY_MS}ms` } as CSSProperties}
                 />
               ) : null}
             </button>

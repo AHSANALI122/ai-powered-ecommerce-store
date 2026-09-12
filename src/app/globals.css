@@ -231,6 +231,29 @@ body {
   animation: pop 0.4s var(--ease-interaction);
 }
 
+/**
+ * The hero carousel's autoplay countdown, drawn inside the active dot.
+ *
+ * It is a class and a media query rather than an inline `animation` chosen in
+ * JavaScript, because the component cannot read the motion preference without
+ * lying to the server: `matchMedia` is `false` during SSR and the real value
+ * on the client's first render, so any markup that branches on it hydrates
+ * mismatched — and React does not patch mismatched attributes, which left the
+ * server's animation running for precisely the reader who asked for none.
+ *
+ * Under `reduce` there is no animation and the span stays a filled bar, which
+ * is the finished state and what the countdown would have drawn anyway.
+ *
+ * The duration comes from `--sweep-ms`, set by the component from the same
+ * constant it gives the autoplay plugin, so the bar cannot drift out of step
+ * with the rotation it is counting down.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .dot-sweep {
+    animation: progress-sweep var(--sweep-ms, 6000ms) linear both;
+  }
+}
+
 @utility shimmer {
   background-image: linear-gradient(
     90deg,
