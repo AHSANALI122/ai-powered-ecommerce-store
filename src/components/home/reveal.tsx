@@ -52,7 +52,15 @@ export function Reveal({
         whileInView: { opacity: 1, y: 0 },
         // `once` matters: re-animating on every scroll past is what makes a
         // page feel unusable rather than considered.
-        viewport: { once: true, amount: 0.15 },
+        //
+        // `amount` is an IntersectionObserver threshold, and a fractional one
+        // is a fraction of *the element*, not of the viewport — so a section
+        // taller than `viewport / amount` can never satisfy it and stays at
+        // `opacity: 0` forever. That is a phone-only failure: these sections
+        // collapse to a two-column grid on a small screen and grow several
+        // times taller than they are on a desktop. `"some"` is threshold 0 —
+        // any part visible — so it cannot be outgrown.
+        viewport: { once: true, amount: "some" as const },
         transition: { duration: 0.45, delay, ease: [0.22, 1, 0.36, 1] as const },
       };
 
