@@ -144,8 +144,13 @@ export function CartClient({
                   >
                     {line.productTitle}
                   </Link>
+                  {/* The SKU is operator data — it is in the order confirmation
+                      and the admin, and no shopper reconciles a cart by it. On a
+                      phone the content column is ~170px wide, and a 20-character
+                      SKU is what breaks this line into two ragged rows. */}
                   <p className="text-sm text-[var(--color-muted)]">
-                    {line.colorName} · {line.size} · SKU {line.sku}
+                    {line.colorName} · {line.size}
+                    <span className="hidden sm:inline"> · SKU {line.sku}</span>
                   </p>
                 </div>
                 <p className="font-medium tabular-nums">
@@ -205,14 +210,35 @@ export function CartClient({
                 <span className="text-sm text-[var(--color-muted)] tabular-nums">
                   {formatMoney(line.unitPrice, cart.currency)} each
                 </span>
-                <button
-                  type="button"
-                  onClick={() => remove(line)}
-                  disabled={pending && busyLine === line.id}
-                  className="link-sweep ml-auto text-sm text-[var(--color-muted)] transition-colors duration-200 hover:text-[var(--color-ink)] disabled:opacity-50"
-                >
-                  Remove
-                </button>
+                {/* Its own line on a phone, at the left of the column. The
+                    assistant's floating button occupies the bottom-right 48px
+                    of the viewport, and every card here puts Remove at its own
+                    bottom-right — so whichever line sits at the foot of the
+                    screen had its Remove underneath the button.
+
+                    Left-aligning it alone is not enough: it then trails the
+                    unit price and its position depends on how wide that price
+                    is. Measured at 390px, "PKR 2,490.00 each" cleared the
+                    button by 11px and "PKR 124,500.00 each" — an ordinary coat
+                    in PKR — overlapped it by 7. The wrapper takes the full line
+                    so the position depends on nothing, while the button keeps
+                    its own width: `basis-full` on the button itself would
+                    stretch its hit area back under the floating one.
+
+                    The boundary is `lg`, not `sm`, because that is where the
+                    cart becomes two columns and the lines stop reaching the
+                    right edge of the window. At 768px, single-column, Remove
+                    sat 115px inside the floating button. */}
+                <div className="basis-full lg:ml-auto lg:basis-auto">
+                  <button
+                    type="button"
+                    onClick={() => remove(line)}
+                    disabled={pending && busyLine === line.id}
+                    className="link-sweep -my-2 py-2 text-sm text-[var(--color-muted)] transition-colors duration-200 hover:text-[var(--color-ink)] disabled:opacity-50 lg:my-0 lg:py-0"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             </div>
           </li>
