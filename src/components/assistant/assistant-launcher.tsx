@@ -87,7 +87,13 @@ export function AssistantLauncher({ available }: { available: boolean }) {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-label={open ? "Close the shopping assistant" : "Open the shopping assistant"}
-        className="group flex items-center gap-2 rounded-full bg-[var(--color-ink)] px-5 py-3 text-sm font-medium text-[var(--color-surface)] shadow-[var(--shadow-panel)] transition-[transform,box-shadow] duration-300 ease-[var(--ease-entrance)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] active:translate-y-0"
+        // Icon-only below `sm`. The pill is ~150px wide, and on a two-column
+        // phone grid it sits over a product tile's title and price — content
+        // scrolls under it, so nothing is lost, but it covers proportionally
+        // far more of a phone than of the desktop it was drawn for. A 48px
+        // circle is still a comfortable touch target, and `aria-label` on the
+        // button already carries the name the visible text was repeating.
+        className="group flex size-12 items-center justify-center rounded-full bg-[var(--color-ink)] text-base font-medium text-[var(--color-surface)] shadow-[var(--shadow-panel)] transition-[transform,box-shadow] duration-300 ease-[var(--ease-entrance)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] active:translate-y-0 sm:size-auto sm:gap-2 sm:px-5 sm:py-3 sm:text-sm"
       >
         <span
           aria-hidden="true"
@@ -97,7 +103,7 @@ export function AssistantLauncher({ available }: { available: boolean }) {
         >
           {open ? "✕" : "✦"}
         </span>
-        {open ? "Close" : "Ask for help"}
+        <span className="hidden sm:inline">{open ? "Close" : "Ask for help"}</span>
       </button>
     </div>
   );
