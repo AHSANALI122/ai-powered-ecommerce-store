@@ -25,14 +25,17 @@ export function AccountNav() {
   }
 
   if (!user) {
+    // "Register" is dropped below `sm`: the register page is one tap from the
+    // sign-in screen, and two links here is what pushes the top row wider than
+    // a phone.
     return (
-      <div className="flex items-center gap-4 text-sm">
-        <Link href="/login" className="link-sweep">
+      <div className="flex items-center gap-3 text-sm sm:gap-4">
+        <Link href="/login" className="link-sweep whitespace-nowrap">
           Sign in
         </Link>
         <Link
           href="/register"
-          className="link-sweep text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)]"
+          className="link-sweep hidden text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)] sm:inline"
         >
           Register
         </Link>
@@ -40,20 +43,27 @@ export function AccountNav() {
     );
   }
 
+  // Signed in, the row is a role badge, a name and a sign-out control — around
+  // 200px of text next to a wordmark, a search field and a cart. Below `sm` the
+  // badge and the sign-out link are hidden and the name is clipped harder: both
+  // live on /account, which is where the name links to, so nothing here is the
+  // only way to reach anything.
   return (
-    <div className="flex items-center gap-4 text-sm">
+    <div className="flex items-center gap-3 text-sm sm:gap-4">
       {user.role === "ADMIN" || user.role === "STAFF" ? (
         // A label, not a control. The dashboard link lands here in F4; access
         // is enforced by the proxy and re-checked against the user row on every
         // admin route (SEC-7).
-        <span className="rounded-full border border-[var(--color-accent)] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[var(--color-accent)]">
+        <span className="hidden rounded-full border border-[var(--color-accent)] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[var(--color-accent)] sm:inline">
           {user.role.toLowerCase()}
         </span>
       ) : null}
-      <Link href="/account" className="link-sweep max-w-28 truncate">
+      <Link href="/account" className="link-sweep max-w-20 truncate sm:max-w-28">
         {user.name ?? "Account"}
       </Link>
-      <SignOutButton />
+      <span className="hidden sm:inline">
+        <SignOutButton />
+      </span>
     </div>
   );
 }

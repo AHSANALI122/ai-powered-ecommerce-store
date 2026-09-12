@@ -115,21 +115,21 @@ export function CartClient({
           <li
             key={line.id}
             className={surfaceClass(
-              `group animate-fade-up flex gap-4 p-4 transition-opacity duration-200 ${
+              `group animate-fade-up flex gap-3 p-3 transition-opacity duration-200 sm:gap-4 sm:p-4 ${
                 pending && busyLine === line.id ? "opacity-60" : ""
               }`,
             )}
           >
             <Link
               href={runtimeRoute(`/p/${line.productSlug}`)}
-              className="relative size-24 shrink-0 overflow-hidden rounded-lg bg-[var(--color-subtle)]"
+              className="relative size-20 shrink-0 overflow-hidden rounded-lg bg-[var(--color-subtle)] sm:size-24"
             >
               {line.image ? (
                 <Image
                   src={line.image}
                   alt=""
                   fill
-                  sizes="96px"
+                  sizes="(max-width: 640px) 80px, 96px"
                   className="object-cover transition-transform duration-500 ease-[var(--ease-entrance)] group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                 />
               ) : null}
@@ -162,7 +162,12 @@ export function CartClient({
                 </p>
               ) : null}
 
-              <div className="flex items-center gap-3">
+              {/* Wraps on a phone: a stepper, a unit price and a remove
+                  control are about 300px of content inside a row that has
+                  ~230px once the thumbnail and the card padding are taken. The
+                  remove link keeps `ml-auto` so it stays right-aligned on the
+                  row it lands on. */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 {/* A stepper rather than a number input: the two operations a
                     shopper actually performs on a cart line are "one more" and
                     "one fewer", and each is a labelled button a screen reader
@@ -174,7 +179,7 @@ export function CartClient({
                     onClick={() => changeQuantity(line, line.quantity - 1)}
                     disabled={line.quantity <= 1 || (pending && busyLine === line.id)}
                     aria-label={`Reduce quantity of ${line.productTitle}`}
-                    className="flex size-7 items-center justify-center rounded-full text-sm transition-colors duration-200 hover:bg-[var(--color-subtle)] disabled:opacity-35"
+                    className="flex size-9 items-center justify-center rounded-full text-base transition-colors duration-200 hover:bg-[var(--color-subtle)] disabled:opacity-35 sm:size-7 sm:text-sm"
                   >
                     <span aria-hidden="true">−</span>
                   </button>
@@ -192,7 +197,7 @@ export function CartClient({
                       (pending && busyLine === line.id)
                     }
                     aria-label={`Increase quantity of ${line.productTitle}`}
-                    className="flex size-7 items-center justify-center rounded-full text-sm transition-colors duration-200 hover:bg-[var(--color-subtle)] disabled:opacity-35"
+                    className="flex size-9 items-center justify-center rounded-full text-base transition-colors duration-200 hover:bg-[var(--color-subtle)] disabled:opacity-35 sm:size-7 sm:text-sm"
                   >
                     <span aria-hidden="true">+</span>
                   </button>
@@ -216,7 +221,7 @@ export function CartClient({
 
       <aside
         className={surfaceClass(
-          "flex w-full flex-col gap-4 p-6 lg:sticky lg:top-28 lg:w-80",
+          "flex w-full flex-col gap-4 p-5 sm:p-6 lg:sticky lg:top-28 lg:w-80",
         )}
       >
         <h2 className="font-display text-lg font-semibold">Summary</h2>

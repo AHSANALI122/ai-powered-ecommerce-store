@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/current-user";
+import { SignOutButton } from "@/components/site/sign-out-button";
 import { PasswordForm, ProfileForm, ResendVerificationButton } from "./account-forms";
 
 /** Account pages are never indexed (spec §7). */
@@ -29,9 +30,17 @@ export default async function AccountPage() {
 
   return (
     <div className="flex flex-col gap-10 py-4">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Your account</h1>
-        <p className="mt-1 text-sm text-[var(--color-muted)]">{user.email}</p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight">Your account</h1>
+          <p className="mt-1 truncate text-sm text-[var(--color-muted)]">{user.email}</p>
+        </div>
+        {/* The header's sign-out is hidden on a phone, where the top row has no
+            room for it — so it has to exist somewhere a phone can reach, and
+            the account page is where someone would look for it anyway. */}
+        <span className="shrink-0 text-sm sm:hidden">
+          <SignOutButton />
+        </span>
       </header>
 
       {!user.emailVerified ? (

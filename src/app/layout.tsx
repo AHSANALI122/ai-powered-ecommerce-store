@@ -77,36 +77,69 @@ export default function RootLayout({
         {/* Facts, not marketing: PKR is the single base currency (spec §4) and
             worldwide shipping is what this store is. */}
         <div className="border-b border-[var(--color-line)] bg-[var(--color-ink)] text-[var(--color-surface)]">
-          <p className="mx-auto max-w-6xl px-6 py-2 text-center text-[11px] uppercase tracking-[0.18em]">
+          <p className="mx-auto max-w-6xl px-4 py-2 text-center text-[10px] uppercase tracking-[0.12em] sm:px-6 sm:text-[11px] sm:tracking-[0.18em]">
             Worldwide shipping · Prices in PKR · Real-time stock
           </p>
         </div>
 
         <header className="sticky top-0 z-40 border-b border-[var(--color-line)] bg-[var(--color-surface)]">
-          <div className="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:px-6 sm:py-4">
+            {/*
+              Three things compete for the top row — the wordmark, search, and
+              the account controls — and on a 360px screen only two of them
+              fit. `flex-wrap` used to be the answer and it is the wrong one:
+              a wrapped search field lands under the wordmark at whatever width
+              is left over, which is the broken header people actually see.
+
+              Below `sm` the field becomes an icon that goes to /search, which
+              renders the real one. Giving it a row of its own was the other
+              option and it costs about 50px — on a header that is already
+              sticky and already carries a category scroller, that is a quarter
+              of a phone screen permanently spent on chrome.
+            */}
+            <div className="flex items-center justify-between gap-3">
               <Link
                 href="/"
-                className="font-display text-xl font-semibold tracking-tight transition-opacity hover:opacity-70 sm:text-2xl"
+                className="font-display min-w-0 truncate text-lg font-semibold tracking-tight transition-opacity hover:opacity-70 sm:text-2xl"
               >
                 {publicEnv.NEXT_PUBLIC_SITE_NAME}
               </Link>
-              <div className="flex items-center gap-4 sm:gap-6">
-                <SearchForm />
+              <div className="flex shrink-0 items-center gap-3 sm:gap-6">
+                <div className="hidden sm:block">
+                  <SearchForm />
+                </div>
+                <Link
+                  href="/search"
+                  aria-label="Search products"
+                  className="flex size-9 items-center justify-center rounded-full transition-colors hover:bg-[var(--color-subtle)] sm:hidden"
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    className="size-5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                  >
+                    <circle cx="9" cy="9" r="6" />
+                    <path d="m13.5 13.5 3.5 3.5" strokeLinecap="round" />
+                  </svg>
+                </Link>
                 <CartLink />
                 <nav aria-label="Account">
                   <AccountNav />
                 </nav>
               </div>
             </div>
+
             <nav aria-label="Primary">
               <CategoryNav />
             </nav>
           </div>
         </header>
 
-        <div className="mx-auto flex min-h-full max-w-6xl flex-col px-6">
-          <main id="main" className="flex-1 py-10">
+        <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col px-4 sm:px-6">
+          <main id="main" className="flex-1 py-8 sm:py-10">
             {children}
           </main>
 
@@ -122,7 +155,10 @@ export default function RootLayout({
                   the server before you pay.
                 </p>
               </div>
-              <nav aria-label="Footer" className="flex gap-12 text-sm">
+              <nav
+                aria-label="Footer"
+                className="grid grid-cols-2 gap-8 text-sm sm:flex sm:gap-12"
+              >
                 <div className="flex flex-col gap-2">
                   <p className="text-xs uppercase tracking-widest text-[var(--color-muted)]">
                     Shop

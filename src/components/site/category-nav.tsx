@@ -32,9 +32,18 @@ export async function CategoryNav() {
   if (tree.length === 0) return null;
 
   return (
-    <ul className="-mx-1 flex items-center gap-1 overflow-x-auto text-sm [scrollbar-width:none] sm:gap-2">
+    /*
+     * A horizontal scroller on a phone, where six categories never fit.
+     * The negative margin + padding lets it bleed to the screen edge, so the
+     * last chip is visibly cut off rather than sitting flush against a
+     * container edge that makes it look like the list simply ends — that hint
+     * is what tells a thumb there is more to the right. Both scrollbars are
+     * hidden (Firefox's property and WebKit's pseudo-element), and snapping
+     * keeps a chip from being left half-scrolled.
+     */
+    <ul className="-mx-4 flex snap-x items-center gap-1 overflow-x-auto px-4 text-sm [-webkit-overflow-scrolling:touch] [scrollbar-width:none] sm:-mx-1 sm:gap-2 sm:px-1 [&::-webkit-scrollbar]:hidden">
       {tree.map((root) => (
-        <li key={root.id} className="group relative shrink-0">
+        <li key={root.id} className="group relative shrink-0 snap-start">
           <Link
             href={runtimeRoute(`/c/${root.slug}`)}
             className="link-sweep inline-block rounded-full px-3 py-1.5 font-medium tracking-wide transition-colors hover:bg-[var(--color-subtle)]"
@@ -64,16 +73,36 @@ export async function CategoryNav() {
   );
 }
 
-/** Keyword search. A plain GET form: linkable, crawlable, no JavaScript. */
-export function SearchForm({ defaultValue = "" }: { defaultValue?: string }) {
+/**
+ * Keyword search. A plain GET form: linkable, crawlable, no JavaScript.
+ *
+ * `fullWidth` is the phone case. Inline in the header the field is a fixed
+ * width that grows on focus, which is right when it shares a row with the
+ * wordmark and the cart; on its own row below `sm` it should simply take the
+ * width it has, and a width transition on an element that is already as wide
+ * as its container is a transition to nowhere.
+ */
+export function SearchForm({
+  defaultValue = "",
+  fullWidth = false,
+}: {
+  defaultValue?: string;
+  fullWidth?: boolean;
+}) {
+  // Both variants render in the header — one hidden — so a single hardcoded id
+  // would be duplicated, and a label would point at whichever came first.
+  const inputId = fullWidth ? "site-search-mobile" : "site-search";
+
   return (
     <form
       method="get"
       action="/search"
       role="search"
-      className="group flex items-center gap-2 rounded-full border border-[var(--color-line)] bg-[var(--color-elevated)] pl-3 pr-1 py-1 transition-[border-color,box-shadow,width] duration-300 ease-[var(--ease-interaction)] focus-within:border-[var(--color-ink)] focus-within:shadow-[var(--shadow-card)]"
+      className={`group flex items-center gap-2 rounded-full border border-[var(--color-line)] bg-[var(--color-elevated)] pl-3 pr-1 py-1 transition-[border-color,box-shadow,width] duration-300 ease-[var(--ease-interaction)] focus-within:border-[var(--color-ink)] focus-within:shadow-[var(--shadow-card)] ${
+        fullWidth ? "w-full" : ""
+      }`}
     >
-      <label htmlFor="site-search" className="sr-only">
+      <label htmlFor={inputId} className="sr-only">
         Search products
       </label>
       <svg
@@ -88,13 +117,17 @@ export function SearchForm({ defaultValue = "" }: { defaultValue?: string }) {
         <path d="m13.5 13.5 3.5 3.5" strokeLinecap="round" />
       </svg>
       <input
-        id="site-search"
+        id={inputId}
         name="q"
         type="search"
         defaultValue={defaultValue}
         maxLength={80}
         placeholder="Search"
-        className="w-28 min-w-0 bg-transparent py-1 text-sm outline-none transition-[width] duration-300 ease-[var(--ease-interaction)] focus:w-40 sm:w-40 sm:focus:w-56"
+        className={
+          fullWidth
+            ? "w-full min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none"
+            : "w-28 min-w-0 bg-transparent py-1 text-sm outline-none transition-[width] duration-300 ease-[var(--ease-interaction)] focus:w-40 sm:w-40 sm:focus:w-56"
+        }
       />
       <button
         type="submit"

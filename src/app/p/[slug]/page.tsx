@@ -137,14 +137,14 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
         </ol>
       </nav>
 
-      <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-10">
         <ProductGallery images={product.images} title={product.title} />
 
         {/* Sticky on a wide screen so the price, the size picker and the
             add-to-cart button stay in view while the photographs scroll. */}
         <div className="flex flex-col gap-6 lg:sticky lg:top-28 lg:self-start">
           <header className="flex flex-col gap-2">
-            <h1 className="font-display text-3xl font-semibold leading-tight tracking-tight">
+            <h1 className="font-display text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">
               {product.title}
             </h1>
             {product.brand ? (
@@ -207,7 +207,7 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
               <h2 className="text-xs uppercase tracking-[0.16em] text-[var(--color-muted)]">
                 Details
               </h2>
-              <dl className="grid grid-cols-[8rem_1fr] gap-y-1 text-sm">
+              <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1 text-sm sm:grid-cols-[8rem_1fr]">
                 {Object.entries(product.attributes).map(([key, value]) => (
                   <div key={key} className="contents">
                     <dt className="capitalize text-[var(--color-muted)]">{key}</dt>

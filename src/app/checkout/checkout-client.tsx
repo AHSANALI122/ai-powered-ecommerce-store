@@ -244,7 +244,7 @@ export function CheckoutClient({
             <ul className="flex flex-col gap-2">
               {quote.options.map((option) => (
                 <li key={option.id}>
-                  <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-[var(--color-line)] p-4 text-sm has-checked:border-[var(--color-ink)] has-checked:ring-1 has-checked:ring-[var(--color-ink)]">
+                  <label className="flex cursor-pointer flex-wrap items-center gap-3 rounded-lg border border-[var(--color-line)] p-4 text-sm has-checked:border-[var(--color-ink)] has-checked:ring-1 has-checked:ring-[var(--color-ink)]">
                     <input
                       type="radio"
                       name="shippingRate"
@@ -273,7 +273,7 @@ export function CheckoutClient({
         </section>
       </div>
 
-      <aside className="flex w-full flex-col gap-4 rounded-lg border border-[var(--color-line)] p-6 lg:w-80">
+      <aside className="flex w-full flex-col gap-4 rounded-lg border border-[var(--color-line)] p-5 sm:p-6 lg:sticky lg:top-28 lg:w-80">
         <h2 className="text-lg font-medium">Order summary</h2>
 
         <ul className="flex flex-col gap-2 text-sm">

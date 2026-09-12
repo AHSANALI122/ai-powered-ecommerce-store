@@ -56,9 +56,51 @@ body {
 
 html {
   scroll-behavior: smooth;
+  /* iOS inflates text in landscape unless this is stated. */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ---------------------------------------------------------------------------
+   Small screens.
+
+   Two rules, both safety nets rather than layout:
+
+   `overflow-x: clip` catches anything that escapes the container — a long SKU,
+   an unbreakable URL in a review — and turns a page you can drag sideways into
+   one you cannot. `clip` rather than `hidden` on purpose: `hidden` would make
+   the body a scroll container and break the sticky header.
+
+   The second is the one people actually feel. iOS Safari zooms the page when a
+   focused field's text is under 16px, and never zooms back out, which is most
+   of what "the mobile UI is broken" turns out to be on a form. The site's
+   fields are `text-sm` (14px) by design on a mouse-driven screen, so the floor
+   is applied only where there is no hover — a touch screen — and the visual
+   size is left alone everywhere else.
+--------------------------------------------------------------------------- */
+
+@media (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* A long word — an email, a SKU, a pasted URL — must wrap rather than widen
+   the page it sits in. */
+h1,
+h2,
+h3,
+p,
+li,
+dd,
+dt,
+address {
+  overflow-wrap: break-word;
 }
 
 body {
+  overflow-x: clip;
   background: var(--color-surface);
   color: var(--color-ink);
   font-family: var(--font-sans);

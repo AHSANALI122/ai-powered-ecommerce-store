@@ -4,6 +4,7 @@ import { parseCatalogQuery } from "@/lib/validation/catalog-query";
 import { getFacets, listProducts, searchProductIds } from "@/server/catalog/queries";
 import { ProductGrid } from "@/components/catalog/product-card";
 import { FilterPanel } from "@/components/catalog/filter-panel";
+import { SearchForm } from "@/components/site/category-nav";
 import { Pagination } from "@/components/catalog/pagination";
 
 /**
@@ -33,8 +34,15 @@ export default async function SearchPage(props: PageProps<"/search">) {
       <div className="flex flex-col gap-4">
         <h1 className="font-display text-3xl font-semibold tracking-tight">Search</h1>
         <p className="text-sm text-[var(--color-muted)]">
-          Type a product, brand or material into the search box above.
+          Type a product, brand or material.
         </p>
+        {/* Below `sm` the header shows a search icon that lands here rather
+            than a field, so this page has to be the field. On a wider screen
+            the header's own field is a few pixels away and a second one is
+            just two places to type the same thing. */}
+        <div className="max-w-sm sm:hidden">
+          <SearchForm fullWidth />
+        </div>
       </div>
     );
   }
@@ -62,9 +70,14 @@ export default async function SearchPage(props: PageProps<"/search">) {
         <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--color-muted)]">
           {page.total} {page.total === 1 ? "match" : "matches"}
         </p>
-        <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+        <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-4xl">
           Results for “{term}”
         </h1>
+        {/* Refining a search is the most likely next action on this page, and
+            on a phone the header has no field to go back to. */}
+        <div className="mt-3 sm:hidden">
+          <SearchForm fullWidth defaultValue={term} />
+        </div>
       </header>
 
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-[16rem_1fr]">
